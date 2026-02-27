@@ -1,0 +1,747 @@
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --accent: #238636;
+  --accent-hover: #2ea043;
+  --blue: #1f6feb;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --badge-active-bg: #1b4332;
+  --badge-active-text: #3fb950;
+  --badge-pending-bg: #1c2128;
+  --badge-pending-text: #8b949e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+}
+
+/* ── Main page header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+header h1 span {
+  color: var(--blue);
+}
+header p {
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+}
+.course-badge {
+  display: inline-block;
+  margin-top: 0.8rem;
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: 2rem;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ── Nav Tabs ── */
+nav {
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+}
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+nav button:hover {
+  color: var(--text);
+}
+nav button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent-hover);
+  font-weight: 600;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ── Main ── */
+main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+.section {
+  display: none;
+}
+.section.active {
+  display: block;
+}
+
+/* ── Section Header ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+}
+.section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.section-header h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.section-header p {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.1rem;
+}
+
+/* ── Cards list ── */
+.cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.4rem;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.card:hover {
+  border-color: #484f58;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.card.card-active {
+  border-left: 3px solid var(--accent-hover);
+}
+.card.card-done {
+  border-left: 3px solid #8957e5;
+}
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.card-number {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.card-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.card-author {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Badges ── */
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 2rem;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+.badge-active {
+  background: var(--badge-active-bg);
+  color: var(--badge-active-text);
+  border: 1px solid #2ea04350;
+}
+.badge-active::before {
+  content: "● ";
+  font-size: 0.6rem;
+}
+.badge-pending {
+  background: var(--badge-pending-bg);
+  color: var(--badge-pending-text);
+  border: 1px solid var(--border);
+}
+.badge-done {
+  background: #1c1035;
+  color: #c5b4f9;
+  border: 1px solid #8957e550;
+}
+.badge-done::before {
+  content: "✓ ";
+  font-size: 0.65rem;
+}
+
+/* ── Card Title Link ── */
+.card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+.card-title-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.card-title-link:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+.card > p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* ── Card Footer ── */
+.card-footer {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.tags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.tag {
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  color: var(--text-muted);
+}
+.read-link {
+  color: var(--blue);
+  font-size: 0.82rem;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.read-link:hover {
+  text-decoration: underline;
+}
+
+/* ── kw Sub-section ── */
+.sub-section {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  background: #0d1117;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.sub-section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sub-section > p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.65rem;
+}
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.step-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.step-num {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  min-width: 1.4rem;
+  flex-shrink: 0;
+}
+.step-item a {
+  color: var(--blue);
+  text-decoration: none;
+}
+.step-item a:hover {
+  text-decoration: underline;
+}
+.step-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.6rem;
+  padding-left: 1.9rem;
+  line-height: 1.4;
+}
+.step-note a {
+  color: var(--blue);
+  text-decoration: none;
+}
+.step-note a:hover {
+  text-decoration: underline;
+}
+
+/* ── Subsection Divider ── */
+.subsection-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 2rem 0 1rem;
+}
+.subsection-divider h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
+}
+.subsection-divider hr {
+  flex: 1;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Link Card ── */
+.link-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.2rem;
+}
+.link-card h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.link-card .lc-author {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+.link-card .lc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Placeholder ── */
+.placeholder-card {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+.placeholder-card .icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+.placeholder-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--text);
+}
+.placeholder-card p {
+  font-size: 0.85rem;
+}
+
+/* ── Footer ── */
+footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 3rem;
+}
+footer a {
+  color: var(--blue);
+  text-decoration: none;
+}
+footer a:hover {
+  text-decoration: underline;
+}
+
+/* ═══════════════════════════════════════
+   Relatos Styles
+   ═══════════════════════════════════════ */
+
+/* ── Documentation content wrapper ── */
+.doc-content {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ── Section ── */
+.doc-section {
+  margin-bottom: 2.75rem;
+}
+
+.doc-section h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.5rem 0 0.6rem;
+}
+
+/* ── Prose ── */
+.doc-section p {
+  font-size: 0.93rem;
+  color: var(--text);
+  line-height: 1.8;
+  margin-bottom: 0.85rem;
+}
+.doc-section p:last-child {
+  margin-bottom: 0;
+}
+
+.doc-section strong {
+  color: #fff;
+}
+.doc-section em {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.doc-section ul,
+.doc-section ol {
+  font-size: 0.93rem;
+  color: var(--text);
+  line-height: 1.8;
+  padding-left: 1.5rem;
+  margin-bottom: 0.85rem;
+}
+.doc-section li {
+  margin-bottom: 0.3rem;
+}
+
+/* ── Inline code ── */
+.doc-section code {
+  background: #1c2128;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.82em;
+  padding: 0.1em 0.4em;
+  color: #e6c980;
+}
+
+/* ── Code blocks ── */
+.doc-section pre {
+  background: #010409;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1.1rem 0;
+}
+.doc-section pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+  color: #e6edf3;
+}
+
+/* ── Images ── */
+.doc-section figure {
+  margin: 1.5rem 0;
+}
+.doc-section figure img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: block;
+}
+.doc-section figcaption {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* ── Image placeholder ── */
+.img-placeholder {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin: 1.1rem 0;
+}
+.img-placeholder .ph-icon {
+  font-size: 1.75rem;
+  margin-bottom: 0.4rem;
+}
+.img-placeholder p {
+  margin-top: 0.25rem;
+}
+
+/* ── Relato top bar ── */
+.top-nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.top-nav a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.top-nav a:hover {
+  color: var(--text);
+}
+.top-nav .site-name {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.top-nav .site-name strong {
+  color: var(--blue);
+}
+
+/* ── relato hero ── */
+.relato-hero {
+  border-bottom: 1px solid var(--border);
+  padding: 2rem 1.5rem 1.75rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.tut-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.tut-number {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.tut-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.tut-author-line {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
+}
+.relato-hero h1 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 0.75rem;
+}
+.relato-hero .description {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+  margin-bottom: 1rem;
+}
+
+/* ── Diary ── */
+.diary-section {
+  margin-top: 2rem;
+}
+.diary-section > h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.diary-entry {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: 10px;
+  padding: 1.2rem 1.4rem;
+  margin-bottom: 1rem;
+}
+.entry-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.65rem;
+}
+.diary-entry p {
+  font-size: 0.9rem;
+  color: var(--text);
+  line-height: 1.65;
+  margin-bottom: 0.6rem;
+}
+.diary-entry p:last-child {
+  margin-bottom: 0;
+}
+.diary-entry ul,
+.diary-entry ol {
+  font-size: 0.9rem;
+  color: var(--text);
+  padding-left: 1.4rem;
+  line-height: 1.65;
+}
+.diary-entry li {
+  margin-bottom: 0.3rem;
+}
+.diary-empty {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.diary-empty p {
+  margin-top: 0.4rem;
+}
+
+/* ── relato bottom nav ── */
+.nav-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  max-width: 760px;
+  margin: 3rem auto 1.5rem;
+}
+.tut-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 760px;
+  margin: 0 auto 2rem;
+  padding: 0 1.5rem;
+  flex-wrap: wrap;
+}
+.tut-nav a {
+  color: var(--blue);
+  text-decoration: none;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+.tut-nav a:hover {
+  border-color: var(--blue);
+}
+.tut-nav a.disabled {
+  color: var(--text-muted);
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+/* ── Relato pages: cancel main's top padding (hero already provides spacing) ── */
+.relato-hero + main {
+  padding-top: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  header h1 {
+    font-size: 1.5rem;
+  }
+  .card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .relato-hero {
+    padding: 1.5rem 1rem 1.25rem;
+  }
+  main {
+    padding: 1.5rem 1rem;
+  }
+}
