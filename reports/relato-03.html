@@ -1,54 +1,446 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Relato 03 — MAC0470</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
-    <link rel="stylesheet" href="../style.css" />
-  </head>
-  <body>
 
-    <div class="top-nav">
-      <a href="../index.html">← Ciclo Kernel Linux</a>
-      <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAC0470 - Tutorial 3</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Ciclo Kernel Linux</a>
+    <span class="site-name">MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Tutorial 03</span>
+      <span class="tut-date">· 11/03/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>3) Introdução aos Módulos do Kernel Linux</h1>
+    <p class="description">
+      Criação de um módulo de exemplo, configuração via KConfig e Kbuild, compilação com
+      <code>menuconfig</code>, deploy na VM ARM64 e instalação dinâmica com <code>insmod</code>,
+      <code>rmmod</code> e <code>modprobe</code>.
+    </p>
+    <div class="tags">
+      <span class="tag">modules</span>
+      <span class="tag">kconfig</span>
+      <span class="tag">kbuild</span>
+      <span class="tag">insmod</span>
+      <span class="tag">modprobe</span>
+      <span class="tag">arm64</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#introducao">1) Introdução</a></li>
+          <li><a href="#modulo-exemplo">2) Criando o Módulo de Exemplo</a></li>
+          <li><a href="#kconfig">3) <code>KConfig</code> e <code>Makefile</code></a></li>
+          <li><a href="#menuconfig">4) Compilando com menuconfig</a></li>
+          <li><a href="#instalando">5) Instalando o Módulo no Kernel</a></li>
+          <li><a href="#dependencias">6) Dependências entre Módulos</a></li>
+          <li><a href="#exercicios">7) Exercícios</a></li>
+        </ol>
+      </nav>
+
+      <section class="relato-section" id="introducao">
+        <h2>1) Introdução</h2>
+        <p><i>Referência: <a href="https://flusp.ime.usp.br/kernel/modules-intro/" target="_blank">FLUSP — Introduction to Linux kernel build configuration and modules</a></i></p>
+        <p>
+          Este tutorial cobre o ciclo completo de desenvolvimento de um módulo do kernel Linux:
+          criação do código-fonte, integração com o sistema de configuração (KConfig) e o sistema
+          de build (Kbuild), habilitação via <code>menuconfig</code>, compilação cruzada para
+          ARM64, deploy na VM e carregamento/descarregamento dinâmico do módulo.
+        </p>
+        <p>
+          Ao final, também são apresentados exercícios sobre configurações de módulos com
+          <code>allmodconfig</code>, <code>localmodconfig</code> e habilitação do
+          <code>IKCONFIG</code> para inspecionar o <code>.config</code> de dentro da VM.
+        </p>
+      </section>
+
+      <section class="relato-section" id="modulo-exemplo">
+        <h2>2) Criando o Módulo de Exemplo</h2>
+
+        <p>
+          O primeiro passo foi criar o arquivo <code>simple_mod.c</code> dentro do diretório
+          <code>drivers/misc/</code> da árvore IIO. O módulo define funções de
+          <code>init</code> e <code>exit</code> que imprimem mensagens no log do kernel via
+          <code>pr_info</code>, registradas com as macros <code>module_init</code> e
+          <code>module_exit</code>.
+        </p>
+
+        <figure>
+          <img src="../images/report-03/1-example-module.png"
+            alt="Código-fonte do módulo de exemplo simple_mod.c" />
+          <figcaption>Código-fonte do <code>simple_mod.c</code> criado em <code>drivers/misc/</code></figcaption>
+        </figure>
+      </section>
+
+      <section class="relato-section" id="kconfig">
+        <h2>3) KConfig e Makefile</h2>
+
+        <h3>Configurando o KConfig</h3>
+        <p>
+          O arquivo <code>Kconfig</code> do subsistema <code>drivers/misc/</code> precisava de uma
+          nova entrada para expor o módulo ao sistema de configuração do kernel. Embora o tutorial recomenda manter a ordem no arquivo,
+          percebi que as entradas estavam fora de ordem; adicionei a entrada no início do arquivo
+          para manter a simplicidade:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/2 - kconfig.png"
+            alt="Entrada CONFIG_SIMPLE_MOD adicionada no início do Kconfig" />
+          <figcaption>Entrada <code>CONFIG_SIMPLE_MOD</code> inserida no <code>Kconfig</code></figcaption>
+        </figure>
+
+        <h3>Adicionando ao Makefile</h3>
+        <p>
+          Com a entrada no <code>KConfig</code> criada, foi necessário adicionar o objeto ao <code>Makefile</code>
+          do diretório para que o Kbuild saiba compilar o módulo quando a opção estiver habilitada:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/2-makefile.png"
+            alt="Linha obj-$(CONFIG_SIMPLE_MOD) += simple_mod.o adicionada ao Makefile" />
+          <figcaption><code>obj-$(CONFIG_SIMPLE_MOD) += simple_mod.o</code> adicionado ao <code>Makefile</code></figcaption>
+        </figure>
+      </section>
+
+      <section class="relato-section" id="menuconfig">
+        <h2>4) Compilando com <code>menuconfig</code></h2>
+
+        <h3>Habilitando o módulo via menuconfig</h3>
+        <p>Para habilitar o módulo no <code>.config</code>, abri o menu de configuração:</p>
+
+        <pre data-lang="bash"><code>make -C "$IIO_TREE" menuconfig</code></pre>
+
+        <p>Utilizei a função de busca (<kbd>/</kbd>) para localizar o módulo:</p>
+
+        <figure>
+          <img src="../images/report-03/3-search.png"
+            alt="Função de busca do menuconfig com o termo SIMPLE_MOD" />
+          <figcaption>Busca pelo módulo no <code>menuconfig</code></figcaption>
+        </figure>
+
+        <figure>
+          <img src="../images/report-03/3-search-result.png"
+            alt="Resultado da busca mostrando CONFIG_SIMPLE_MOD no menuconfig" />
+          <figcaption>Módulo encontrado conforme a entrada criada no <code>Kconfig</code></figcaption>
+        </figure>
+
+        <p>
+          O tutorial menciona buscar por <em>simple test module</em>, mas a entrada estava nomeada
+          como <em>simple example Linux kernel module (NEW)</em>. Assumi que o tutorial foi
+          atualizado e alterei a opção para <code>&lt;M&gt;</code> (módulo compilado separadamente):
+        </p>
+
+        <figure>
+          <img src="../images/report-03/3-simple-example-enable.png"
+            alt="Módulo simple_mod configurado como M no menuconfig" />
+          <figcaption>Módulo configurado como <code>&lt;M&gt;</code> no <code>menuconfig</code></figcaption>
+        </figure>
+
+        <h3>Compilando</h3>
+        <p>
+          Limpei os artefatos de builds anteriores e recompilei o kernel:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/3-kw-build.png"
+            alt="Saída do kw build mostrando compilação concluída" />
+          <figcaption>Compilação concluída — o <code>kw build</code> levou aproximadamente 7 minutos</figcaption>
+        </figure>
+
+        <h3>Deploy dos módulos na VM</h3>
+        <p>
+          Para instalar os módulos compilados na VM, precisei montar a imagem com
+          <code>guestmount</code>. Na tentativa inicial encontrei um erro de crash no
+          <code>libguestfs</code>:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/3-error-mount.png"
+            alt="Erro de crash do libguestfs ao tentar montar a imagem da VM" />
+          <figcaption>Crash do <code>libguestfs</code> ao tentar montar a imagem</figcaption>
+        </figure>
+
+        <p>
+          Após troubleshooting com minha dupla (Felipe), que apresentou o mesmo problema,
+          identificamos duas causas: a VM estava em execução e o dispositivo utilizado era
+          <code>sda2</code> em vez de <code>vda2</code>. Desliguei a VM e corrigi o comando:
+        </p>
+
+        <pre data-lang="bash"><code>sudo virsh shutdown arm64 
+
+sudo guestmount --rw --add "${VM_DIR}/arm64_img.qcow2" \
+  --mount /dev/vda2 "${VM_DIR}/arm64_rootfs"</code></pre>
+
+        <p>Com a imagem montada corretamente, instalei os módulos:</p>
+
+        <figure>
+          <img src="../images/report-03/3-modules-intall.png"
+            alt="Instalação dos módulos na imagem da VM com make modules_install" />
+          <figcaption>Módulos instalados na imagem da VM com sucesso</figcaption>
+        </figure>
+
+        <p>
+          O tutorial tenta desmontar usando <code>$VM_MOUNT_POINT</code>, mas essa variável não
+          estava definida. Utilizei o caminho diretamente:
+        </p>
+
+        <pre data-lang="bash"><code>sudo guestunmount "${VM_DIR}/arm64_rootfs"</code></pre>
+
+        <h3>Verificando a versão do kernel na VM</h3>
+        <p>Com a VM inicializada novamente, confirmei que o kernel com os módulos estava ativo:</p>
+
+        <figure>
+          <img src="../images/report-03/3-kernel-version.png"
+            alt="uname --all mostrando a versão do kernel personalizado na VM" />
+          <figcaption><code>uname --all</code> na VM confirmando o kernel personalizado</figcaption>
+        </figure>
+      </section>
+
+      <section class="relato-section" id="instalando">
+        <h2>5) Instalando o Módulo no Kernel</h2>
+
+        <h3>Inspecionando o módulo com modinfo</h3>
+        <p>
+          Dentro da VM, usei <code>modinfo</code> para inspecionar os metadados do módulo
+          compilado:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/4-modinfo.png"
+            alt="Saída do modinfo para o simple_mod.ko" />
+          <figcaption><code>modinfo</code> exibindo autor, descrição, licença e dependências do módulo</figcaption>
+        </figure>
+
+        <h3>Verificando módulos carregados</h3>
+        <p>
+          Ao listar os módulos com <code>lsmod</code>, o <code>simple_mod</code> ainda não
+          aparecia, pois ainda não havia sido carregado:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/4-lsmod.png"
+            alt="Saída do lsmod sem o simple_mod listado" />
+          <figcaption><code>lsmod</code> — <code>simple_mod</code> ausente antes do carregamento</figcaption>
+        </figure>
+
+        <h3>Carregando com insmod</h3>
+        <p>
+          Para carregar o módulo diretamente a partir do arquivo <code>.ko</code>:
+        </p>
+
+        <pre data-lang="bash"><code>insmod /lib/modules/$(uname -r)/kernel/drivers/misc/simple_mod.ko</code></pre>
+
+        <p>A mensagem de inicialização apareceu nos logs do kernel:</p>
+
+        <figure>
+          <img src="../images/report-03/5-kernel-logs.png"
+            alt="dmesg mostrando a mensagem de init do simple_mod" />
+          <figcaption><code>dmesg | tail</code> — mensagem de <code>Hello world</code> do módulo registrada no log</figcaption>
+        </figure>
+
+        <h3>Descarregando e usando modprobe</h3>
+        <p>Ao descarregar o módulo com <code>rmmod</code>, a mensagem de <code>exit</code> foi registrada:</p>
+
+        <figure>
+          <img src="../images/report-03/4-remove-module-logs.png"
+            alt="dmesg mostrando a mensagem de exit do simple_mod após rmmod" />
+          <figcaption><code>dmesg | tail</code> — mensagem de <code>Goodbye world</code> registrada após <code>rmmod</code></figcaption>
+        </figure>
+
+        <p>
+          O mesmo fluxo foi replicado com <code>modprobe</code>, que diferencia-se do
+          <code>insmod</code> por instalar as dependências do módulo automaticamente:
+        </p>
+
+        <pre data-lang="bash"><code>modprobe simple_mod    # carrega o módulo e suas dependências
+dmesg | tail
+modprobe -r simple_mod # descarrega o módulo
+dmesg | tail</code></pre>
+
+        <p>O comportamento foi idêntico ao <code>insmod</code>/<code>rmmod</code>.</p>
+      </section>
+
+      <section class="relato-section" id="dependencias">
+        <h2>6) Dependências entre Módulos</h2>
+
+        <h3>Modificando o simple_mod</h3>
+        <p>
+          O tutorial propõe adicionar uma dependência ao <code>simple_mod</code> para demonstrar
+          como o KConfig gerencia relações entre módulos. O arquivo foi editado para declarar a
+          dependência:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/5-edit-simple-mod.png"
+            alt="Edição do simple_mod.c adicionando dependência de outro módulo" />
+          <figcaption>Edição do <code>simple_mod.c</code> para adicionar dependência de feature</figcaption>
+        </figure>
+
+        <p>Após a edição, recompilei o módulo:</p>
+
+        <figure>
+          <img src="../images/report-03/5-build-new-simple_mod.png"
+            alt="kw build recompilando o simple_mod com a nova dependência" />
+          <figcaption>Recompilação do <code>simple_mod</code> com a dependência adicionada</figcaption>
+        </figure>
+
+        <p>Os novos logs do kernel após o carregamento:</p>
+
+        <figure>
+          <img src="../images/report-03/5-new-simple-mod-logs.png"
+            alt="dmesg mostrando os logs do simple_mod atualizado" />
+          <figcaption>Logs do <code>simple_mod</code> com a feature de dependência ativa</figcaption>
+        </figure>
+
+        <h3>Criando o simple_mod_part</h3>
+        <p>
+          De forma análoga ao <code>simple_mod</code>, foi criado um segundo módulo
+          <code>simple_mod_part</code> para demonstrar a relação de dependência entre módulos:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/5-log-simple-mod-part.png"
+            alt="Logs do simple_mod_part após carregamento na VM" />
+          <figcaption>Logs do <code>simple_mod_part</code> após carregamento — dependência entre módulos funcionando</figcaption>
+        </figure>
+      </section>
+
+      <section class="relato-section" id="exercicios">
+        <h2>7) Exercícios</h2>
+
+        <h3>Exercício 1 — allmodconfig vs localmodconfig</h3>
+        <p>
+          O primeiro exercício propõe comparar o resultado de <code>make allmodconfig</code>
+          (habilita todos os módulos possíveis) com <code>make localmodconfig</code> (mantém
+          apenas os módulos carregados na máquina atual).
+        </p>
+
+        <p>
+          Rodei <code>make allmodconfig</code> e instal os módulos na VM.
+        </p>
+
+        <pre data-lang="bash"><code>make allmodconfig
+kw ssh --get '~/vm_mod_list'</code></pre>
+
+        <p>
+          Em seguida, apliquei <code>make localmodconfig</code>. O <code>.config</code> reduziu
+          drasticamente: de ~50 módulos para apenas 6. Isso impactou diretamente o tempo de
+          compilação, resultando em um build significativamente mais rápido.
+        </p>
+
+        <figure>
+          <img src="../images/report-03/5-new-vm-mod-list.png"
+            alt="Lista de módulos da VM após make allmodconfig" />
+          <figcaption>Lista de módulos gerada com <code>localmodconfig</code> — redução expressiva de módulos</figcaption>
+        </figure>
+
+        <h3>Exercício 2 — Habilitando IKCONFIG</h3>
+        <p>
+          O segundo exercício propõe habilitar a opção <code>CONFIG_IKCONFIG</code> e
+          <code>CONFIG_IKCONFIG_PROC</code> para disponibilizar o <code>.config</code> de dentro
+          da VM via <code>/proc/config.gz</code>.
+        </p>
+
+        <p>
+          Desliguei a VM, abri o <code>menuconfig</code> e habilitei a opção:
+        </p>
+
+        <pre data-lang="bash"><code>make menuconfig</code></pre>
+
+        <figure>
+          <img src="../images/report-03/kernel-enable-ikconfig.png"
+            alt="CONFIG_IKCONFIG habilitado no menuconfig" />
+          <figcaption><code>CONFIG_IKCONFIG</code> e <code>CONFIG_IKCONFIG_PROC</code> habilitados no <code>menuconfig</code></figcaption>
+        </figure>
+
+        <p>Após o build e iniciar a VM, o arquivo estava disponível em <code>/proc/config.xz</code>:</p>
+
+        <pre data-lang="bash"><code>kw build
+sudo virsh start arm64
+kw ssh</code></pre>
+
+        <figure>
+          <img src="../images/report-03/exercise-2.png"
+            alt="/proc/config.xz disponível na VM após habilitar IKCONFIG" />
+          <figcaption><code>/proc/config.xz</code> presente na VM — configuração do kernel acessível de dentro da VM</figcaption>
+        </figure>
+
+        <h3>Exercício 3 — KBUILD_MODNAME como prefixo de log</h3>
+        <p>
+          O terceiro exercício propõe adicionar a macro <code>pr_fmt</code> para prefixar
+          automaticamente todas as mensagens de log com o nome do módulo:
+        </p>
+
+        <pre data-lang="bash"><code>#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt</code></pre>
+
+        <p>
+          Adicionei essa linha acima dos includes no <code>simple_mod.c</code>, conforme sugerido
+          pelo tutorial, e recompilei o módulo:
+        </p>
+
+        <pre data-lang="bash"><code>kw build</code></pre>
+
+        <p>
+          Para enviar apenas o módulo atualizado à VM sem reinstalar tudo:
+        </p>
+
+        <pre data-lang="bash"><code>kw ssh --send drivers/misc/simple_mod.ko</code></pre>
+
+        <p>
+          Tentei recompilar o <code>simple_mod_part.c</code> da mesma forma, mas nenhuma das
+          tentativas — nem <code>kw build</code> nem <code>modules_prepare</code> — gerou o
+          <code>.ko</code> correspondente para reenviar à VM.
+        </p>
+
+        <p>
+          De qualquer forma, para o <code>simple_mod</code> o resultado foi correto. Após copiar
+          o módulo e rodar <code>depmod --quick</code>, os logs passaram a exibir o prefixo
+          <code>simple_mod:</code>:
+        </p>
+
+        <figure>
+          <img src="../images/report-03/exercise-3.png"
+            alt="dmesg mostrando logs do simple_mod prefixados com KBUILD_MODNAME" />
+          <figcaption>Logs do <code>simple_mod</code> com prefixo <code>simple_mod:</code> via <code>KBUILD_MODNAME</code></figcaption>
+        </figure>
+
+        <p>
+          Mesmo não tendo conseguido replicar ao <code>simple_mod_part</code>, o exercício foi
+          concluído com sucesso para o <code>simple_mod</code>.
+        </p>
+
+        <p><strong>Tutorial de compilação de módulos concluído!</strong></p>
+      </section>
     </div>
 
-    <div class="relato-hero">
-      <div class="tut-label">
-        <span class="tut-number">Relato 03</span>
-        <span class="badge badge-pending">Pendente</span>
-      </div>
-      <h1>Introduction to Linux kernel build configuration and modules</h1>
-      <div class="tags">
-        <span class="tag">modules</span>
-        <span class="tag">kconfig</span>
-        <span class="tag">Kbuild</span>
-      </div>
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-02.html">← Compilando o Kernel</a>
+      <a href="relato-04.html">Próximo relato →</a>
     </div>
+  </main>
 
-    <main>
-      <div class="doc-content">
-        <div class="placeholder-card">
-          <div class="icon">🚧</div>
-          <h3>Trabalho em progresso</h3>
-          <p>Este relato será escrito assim que o tutorial for realizado.</p>
-        </div>
-      </div>
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
 
-      <hr class="nav-divider" />
-      <div class="tut-nav">
-        <a href="relato-02.html">← Relato 02</a>
-        <a href="relato-04.html">Próximo relato →</a>
-      </div>
-    </main>
-
-    <footer>
-      <p>
-        <a href="../index.html">← Voltar ao início</a>
-        &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
-      </p>
-    </footer>
-
-  </body>
 </html>
