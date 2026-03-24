@@ -1,52 +1,210 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Relato 05 — MAC0470</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
-    <link rel="stylesheet" href="../style.css" />
-  </head>
-  <body>
 
-    <div class="top-nav">
-      <a href="../index.html">← Ciclo Kernel Linux</a>
-      <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAC0470 - Tutorial 5</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Ciclo Kernel Linux</a>
+    <span class="site-name">MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Tutorial 05</span>
+      <span class="tut-date">· 25/03/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>5) Enviando Patches por Email com o Git</h1>
+    <p class="description">
+      Configuração do <code>git send-email</code> com ProtonMail via SMTP e teste prático de envio de um patch por email.
+    </p>
+    <div class="tags">
+      <span class="tag">git</span>
+      <span class="tag">patches</span>
+      <span class="tag">git-send-email</span>
+      <span class="tag">smtp</span>
+      <span class="tag">kernel</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#introducao">1) Introdução</a></li>
+          <li><a href="#instalacao">2) Instalação do git-email</a></li>
+          <li><a href="#configurando-git">3) Configurando o Git</a></li>
+          <li><a href="#configurando-smtp">4) Configurando o Servidor SMTP</a></li>
+          <li><a href="#opcoes">5) Opções do git send-email</a></li>
+          <li><a href="#testando">6) Testando o Envio</a></li>
+        </ol>
+      </nav>
+
+      <section class="relato-section" id="introducao">
+        <h2>1) Introdução</h2>
+        <p>
+          <i>Referência: <a href="https://flusp.ime.usp.br/git/sending-patches-by-email-with-git/" target="_blank">FLUSP — Sending patches by email with Git</a></i>
+        </p>
+        <p>
+          Antes de iniciar o tutorial, li o artigo
+          <a href="https://kernelnewbies.org/PatchPhilosophy" target="_blank">Patch Philosophy</a>
+          do KernelNewbies para entender o que é um patch e as boas práticas a serem adotadas ao enviá-lo.
+          O artigo aborda pontos essenciais como manter patches pequenos e focados, escrever mensagens de
+          commit descritivas e seguir o fluxo de revisão da lista de emails do kernel.
+        </p>
+        <p>
+          Este tutorial, embora curto, é fundamental para o fim do ciclo kernel, quando precisaremos
+          enviar nosso patch de contribuição para o subsistema IIO.
+        </p>
+      </section>
+
+      <section class="relato-section" id="instalacao">
+        <h2>2) Instalação do git-email</h2>
+        <p>
+          O <code>git send-email</code> não vem habilitado por padrão. É necessário instalar o pacote
+          <code>git-email</code> separadamente:
+        </p>
+        <pre data-lang="bash"><code>sudo apt-get install git-email</code></pre>
+      </section>
+
+      <section class="relato-section" id="configurando-git">
+        <h2>3) Configurando o Git</h2>
+        <p>
+          Com o pacote instalado, configurei as informações de identidade globais do Git — usadas como
+          remetente nos emails gerados pelo <code>git send-email</code>:
+        </p>
+        <pre data-lang="bash"><code>git config --global user.name "Lucas Ivars Cadima Ciziks"
+git config --global user.email "meu-email-pessoal"</code></pre>
+      </section>
+
+      <section class="relato-section" id="configurando-smtp">
+        <h2>4) Configurando o Servidor SMTP</h2>
+        <p>
+          O tutorial original demonstra a configuração com Gmail, mas como meu email principal é do
+          ProtonMail, segui o guia de
+          <a href="https://proton.me/support/smtp-submission" target="_blank">SMTP do ProtonMail</a>
+          e usei as configurações correspondentes:
+        </p>
+        <pre data-lang="bash"><code>git config --global sendemail.smtpencryption tls
+git config --global sendemail.smtpserver "smtp.protonmail.ch"
+git config --global sendemail.smtpuser "&lt;meu-email-pessoal&gt;"
+git config --global sendemail.smtpserverport "587"
+git config --global sendemail.smtppass "&lt;meu-token-gerado&gt;"</code></pre>
+        <p>
+          O tutorial alerta sobre a insegurança do último comando: o token fica salvo em texto puro
+          dentro do <code>~/.gitconfig</code>. Por conveniência, optei por utilizá-lo mesmo assim.
+        </p>
+        <p>
+          Por fim, configurei o <code>git send-email</code> para não me incluir automaticamente em cópia
+          nos próprios emails enviados:
+        </p>
+        <pre data-lang="bash"><code>git config --global sendemail.suppresscc self</code></pre>
+      </section>
+
+      <section class="relato-section" id="opcoes">
+        <h2>5) Opções do git send-email</h2>
+        <p>
+          O tutorial apresenta as formas básicas de invocar o comando:
+        </p>
+        <pre data-lang="bash"><code>git send-email -N          # Envia os últimos N patches
+git send-email ds2901..89e73  # Envia os commits do hash ds2901 até 89e73</code></pre>
+        <p>
+          Além disso, há diversas opções úteis:
+        </p>
+        <ul>
+          <li>
+            <code>--annotate</code>: abre o email no editor de texto antes de enviar. Dentro do editor,
+            é recomendado usar o separador <code>---</code> (scissor separator) para adicionar comentários,
+            especialmente em revisões de versão (<code>v2</code>, <code>v3</code>...) após um review.
+          </li>
+          <li>
+            <code>--cover-letter</code>: adiciona um email introdutório com uma breve explicação das
+            modificações do patchset. Um exemplo real de patchset com cover letter pode ser visto em
+            <a href="https://lore.kernel.org/lkml/20230414225551.858160935@linutronix.de/" target="_blank">lore.kernel.org</a>.
+          </li>
+          <li>
+            <code>--thread</code>: envia todos os emails do patchset na mesma thread.
+            <ul>
+              <li>
+                <code>--no-chain-reply-to</code>: faz com que todos os emails respondam ao primeiro da
+                thread, comportamento esperado ao contribuir com o kernel Linux.
+              </li>
+              <li>
+                <code>--chain-reply-to</code> (padrão): cada email responde ao anterior.
+              </li>
+            </ul>
+          </li>
+          <li>
+            <code>--dry-run</code>: simula o envio sem de fato mandar os emails.
+          </li>
+          <li>
+            <code>--to</code>: destinatário principal do email.
+          </li>
+          <li>
+            <code>--cc</code>: destinatários em cópia.
+          </li>
+        </ul>
+        <p>Referência do comando: <a href="https://git-scm.com/docs/git-send-email" target="_blank">git-send-email docs</a>
+</p>
+      </section>
+
+      <section class="relato-section" id="testando">
+        <h2>6) Testando o Envio</h2>
+        <p>
+          Para testar o fluxo completo, executei o comando dentro do repositório desta página web,
+          enviando o patch mais recente para o meu próprio email com a flag <code>--annotate</code>
+          para editar o conteúdo antes do envio:
+        </p>
+        <pre data-lang="bash"><code>git send-email --annotate --to="&lt;outro-email-pessoal&gt;" -1</code></pre>
+        <p>
+          O editor <code>nano</code> abriu com o conteúdo do email para que eu pudesse revisá-lo e
+          adicionar comentários:
+        </p>
+        <figure>
+          <img src="../images/report-05/01-teste.png"
+            alt="Editor nano aberto pelo git send-email --annotate com o conteúdo do patch" />
+          <figcaption>Editor aberto pelo <code>--annotate</code> para revisão do email antes do envio</figcaption>
+        </figure>
+        <p>
+          Após confirmar, o patch foi enviado e recebi o email corretamente na minha caixa de entrada:
+        </p>
+        <figure>
+          <img src="../images/report-05/02-email.png"
+            alt="Email recebido com o patch enviado via git send-email" />
+          <figcaption>Email recebido com o patch enviado pelo <code>git send-email</code></figcaption>
+        </figure>
+        <p><strong>Tutorial 5 concluído!</strong></p>
+        <p>
+          Referências úteis:
+          <a href="https://git-scm.com/docs/git-send-email" target="_blank">git-send-email docs</a>,
+          <a href="https://kernelnewbies.org/FirstKernelPatch" target="_blank">FirstKernelPatch</a>,
+          <a href="https://kernelnewbies.org/PatchPhilosophy" target="_blank">PatchPhilosophy</a>.
+        </p>
+      </section>
     </div>
 
-    <div class="relato-hero">
-      <div class="tut-label">
-        <span class="tut-number">Relato 05</span>
-        <span class="badge badge-pending">Pendente</span>
-      </div>
-      <h1>Usando o KWorkflow (kw)</h1>
-      <div class="tags">
-        <span class="tag">kw</span>
-      </div>
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-04.html">← Character Device Drivers</a>
+      <a href="relato-06.html">Anatomia do iio_simple_dummy →</a>
     </div>
+  </main>
 
-    <main>
-      <div class="doc-content">
-        <div class="placeholder-card">
-          <div class="icon">🚧</div>
-          <h3>Trabalho em progresso</h3>
-          <p>Este relato será escrito assim que o tutorial for realizado.</p>
-        </div>
-      </div>
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
 
-      <hr class="nav-divider" />
-      <div class="tut-nav">
-        <a href="relato-04.html">← Character Devices</a>
-        <a href="relato-06.html">Subsistema IIO →</a>
-      </div>
-    </main>
-
-    <footer>
-      <p>
-        <a href="../index.html">← Voltar ao início</a>
-        &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
-      </p>
-    </footer>
-
-  </body>
 </html>
