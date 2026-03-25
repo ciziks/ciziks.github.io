@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MAC0470 - Tutorial 5</title>
+  <title>MAC0470 - Tutoriais 5 e 6</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
   <link rel="stylesheet" href="../style.css" />
 </head>
@@ -17,18 +17,19 @@
 
   <div class="relato-hero">
     <div class="tut-label">
-      <span class="tut-number">Tutorial 05</span>
+      <span class="tut-number">Tutoriais 05 e 06</span>
       <span class="tut-date">· 25/03/2026</span>
       <span class="badge badge-done">Completo</span>
     </div>
-    <h1>5) Enviando Patches por Email com o Git</h1>
+    <h1>5 e 6) Enviando Patches por Email com o Git e kw send-patch</h1>
     <p class="description">
-      Configuração do <code>git send-email</code> com ProtonMail via SMTP e teste prático de envio de um patch por email.
+      Configuração do <code>git send-email</code> com ProtonMail via SMTP e do <code>kw send-patch</code> e teste prático de envio de patches por email com ambas as ferramentas.
     </p>
     <div class="tags">
       <span class="tag">git</span>
       <span class="tag">patches</span>
       <span class="tag">git-send-email</span>
+      <span class="tag">kw send-patch</span>
       <span class="tag">smtp</span>
       <span class="tag">kernel</span>
     </div>
@@ -45,6 +46,9 @@
           <li><a href="#configurando-smtp">4) Configurando o Servidor SMTP</a></li>
           <li><a href="#opcoes">5) Opções do git send-email</a></li>
           <li><a href="#testando">6) Testando o Envio</a></li>
+          <li><a href="#tutorial-6">7) Continuação: Tutorial 6 kw send-patch</a></li>
+          <li><a href="#proxy-email">8) Proxy de Email</a></li>
+          <li><a href="#testando-kw">9) Testando o kw send-patch</a></li>
         </ol>
       </nav>
 
@@ -78,7 +82,7 @@
       <section class="relato-section" id="configurando-git">
         <h2>3) Configurando o Git</h2>
         <p>
-          Com o pacote instalado, configurei as informações de identidade globais do Git — usadas como
+          Com o pacote instalado, configurei as informações de identidade globais do Git, usadas como
           remetente nos emails gerados pelo <code>git send-email</code>:
         </p>
         <pre data-lang="bash"><code>git config --global user.name "Lucas Ivars Cadima Ciziks"
@@ -181,13 +185,66 @@ git send-email ds2901..89e73  # Envia os commits do hash ds2901 até 89e73</code
             alt="Email recebido com o patch enviado via git send-email" />
           <figcaption>Email recebido com o patch enviado pelo <code>git send-email</code></figcaption>
         </figure>
-        <p><strong>Tutorial 5 concluído!</strong></p>
         <p>
           Referências úteis:
           <a href="https://git-scm.com/docs/git-send-email" target="_blank">git-send-email docs</a>,
           <a href="https://kernelnewbies.org/FirstKernelPatch" target="_blank">FirstKernelPatch</a>,
           <a href="https://kernelnewbies.org/PatchPhilosophy" target="_blank">PatchPhilosophy</a>.
         </p>
+      </section>
+
+      <section class="relato-section" id="tutorial-6">
+        <h2>7) Continuação: Tutorial 6 — kw send-patch</h2>
+        <p>
+          <i>Referência: <a href="https://flusp.ime.usp.br/git/sending-patches-with-git-and-a-usp-email/" target="_blank">FLUSP — Sending patches with Git and a USP email</a></i>
+        </p>
+        <p>
+          Como o Tutorial 6 está no mesmo contexto do Tutorial 5 (ambos tratam de envio de patches por email),
+          ele foi incorporado a este relato como continuação. O Tutorial 6 foca no uso do <code>kw send-patch</code>
+          (ferramenta do <a href="https://kworkflow.org/" target="_blank">kworkflow</a>) para envio de patches.
+        </p>
+      </section>
+
+      <section class="relato-section" id="proxy-email">
+        <h2>8) Proxy de Email</h2>
+        <p>
+          O tutorial instrui rodar um proxy de email para resolver a autenticação do Gmail sem App Password.
+          Como configurei um email com domínio próprio ao invés do email USP, não precisei rodar o proxy, pois
+          a autenticação SMTP já estava configurada corretamente desde o Tutorial 5.
+        </p>
+      </section>
+
+      <section class="relato-section" id="testando-kw">
+        <h2>9) Testando o kw send-patch</h2>
+        <p>
+          Após o Tutorial 5, o <code>git send-email</code> já estava configurado corretamente. Basta agora testar
+          o <code>kw send-patch</code>.
+        </p>
+        <p>
+          Para o teste, criei um arquivo <code>LUCAS.CIZIKS.txt</code> com o conteúdo <code>I AM LUCAS CIZIKS.</code>
+          e adicionei uma exceção no <code>.gitignore</code> para aceitar esse arquivo. Em seguida, criei um commit com o mesmo nome.
+        </p>
+        <p>
+          Antes de enviar, utilizei a flag <code>--simulate</code> para verificar se a formatação estava correta:
+        </p>
+        <pre data-lang="bash"><code>kw send-patch --send --private --simulate --to 'luciziks@hotmail.com' --to 'dsl26oauthproxy@gmail.com'</code></pre>
+        <figure>
+          <img src="../images/report-05/03-kw-patch-test.png"
+            alt="Saída do kw send-patch com flag --simulate" />
+          <figcaption>Simulação do envio com <code>kw send-patch --simulate</code></figcaption>
+        </figure>
+        <p>
+          Confirmada a formatação, enviei o "patch" de fato aos remetentes. Uma pequena correção em relação ao tutorial original:
+          ele usa dois <code>--to</code>, o que faz com que apenas o último destinatário receba o email.
+          Corrigi usando <code>--cc</code> para o segundo destinatário:
+        </p>
+        <pre data-lang="bash"><code>kw send-patch --send --private --to 'luciziks@hotmail.com' --cc 'dsl26oauthproxy@gmail.com'</code></pre>
+        <figure>
+          <img src="../images/report-05/04-result-kw.png"
+            alt="Email recebido após envio com kw send-patch" />
+          <figcaption>Email recebido com sucesso após o envio pelo <code>kw send-patch</code></figcaption>
+        </figure>
+        <p><strong>Tutoriais 5 e 6 concluídos!</strong> Tanto o <code>git send-email</code> quanto o <code>kw send-patch</code> estão funcionando.</p>
       </section>
     </div>
 
