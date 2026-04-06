@@ -1,52 +1,423 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Relato 06 — MAC0470</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
-    <link rel="stylesheet" href="../style.css" />
-  </head>
-  <body>
 
-    <div class="top-nav">
-      <a href="../index.html">← Ciclo Kernel Linux</a>
-      <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relato 06 — MAC0470</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Ciclo Kernel Linux</a>
+    <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Tutoriais 07 e 08</span>
+      <span class="tut-date">· 06/04/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>Introdução ao Subsistema IIO e Modificando o iio_simple_dummy</h1>
+    <p class="description">
+      Estudo da anatomia do módulo <code>iio_dummy</code>, habilitação e carregamento do driver no kernel,
+      exploração via configfs e modificação do canal para suporte a bússola 3-eixos (magnetômetro).
+    </p>
+    <div class="tags">
+      <span class="tag">IIO</span>
+      <span class="tag">iio_dummy</span>
+      <span class="tag">kernel</span>
+      <span class="tag">device driver</span>
+      <span class="tag">configfs</span>
+      <span class="tag">kw</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#introducao">1) Introdução ao IIO</a></li>
+          <li><a href="#enabling">2) Habilitando o iio_dummy</a></li>
+          <li><a href="#compilar">3) Compilar, Load e Unload do iio_dummy</a></li>
+          <li><a href="#explorando">4) Explorando o iio_dummy via configfs</a></li>
+          <li><a href="#device0">5) Inspecionando o iio:device0</a></li>
+          <li><a href="#modificando">6) Modificando o Canal para Bússola 3-eixos</a></li>
+          <li><a href="#resultado">7) Resultado Final</a></li>
+        </ol>
+      </nav>
+
+      <section class="relato-section" id="introducao">
+        <h2>1) Introdução ao IIO</h2>
+        <p>
+          <i>Referências:
+            <a href="https://flusp.ime.usp.br/iio/iio-dummy-anatomy/" target="_blank">FLUSP — Anatomia do iio_dummy</a>,
+            <a href="https://flusp.ime.usp.br/iio/experiment-one-iio-dummy/" target="_blank">FLUSP — Experimento com iio_dummy</a>
+          </i>
+        </p>
+        <p>
+          O subsistema <strong>Industrial I/O (IIO)</strong> é responsável por gerenciar dispositivos que produzem
+          ou consomem sinais analógicos, como sensores de temperatura, acelerômetros, giroscópios e magnetômetros.
+          O módulo <code>iio_dummy</code> é um exemplo educacional de Device Driver dentro desse subsistema.
+        </p>
+        <p>
+          Um conceito central do IIO é o <strong>canal (channel)</strong>: cada canal representa um fluxo de dados
+          de um dispositivo. Um único dispositivo IIO pode ter um ou mais canais. A configuração de cada canal é
+          feita através de uma <code>struct iio_chan_spec</code>, declarada em
+          <code>include/linux/iio/iio.h</code>. Essa struct é flexível o suficiente para descrever diferentes tipos
+          de dispositivos com a mesma estrutura base.
+        </p>
+      </section>
+
+      <section class="relato-section" id="enabling">
+        <h2>2) Habilitando o iio_dummy</h2>
+        <p>
+          O primeiro passo foi habilitar o <code>iio_dummy</code> no <code>menuconfig</code> do kernel:
+        </p>
+        <pre data-lang="bash"><code>make -C "$IIO_TREE" menuconfig</code></pre>
+        <figure>
+          <img src="../images/report-06/01-menuconfig.png"
+            alt="Tela do menuconfig com a opção Device Drivers selecionada" />
+          <figcaption>Selecionando <em>Device Drivers</em> no menuconfig</figcaption>
+        </figure>
+        <figure>
+          <img src="../images/report-06/02-iio-support.png"
+            alt="Opção de suporte ao subsistema IIO no menuconfig" />
+          <figcaption>Habilitando o suporte ao subsistema IIO</figcaption>
+        </figure>
+        <figure>
+          <img src="../images/report-06/03-iio-dummy-driver.png"
+            alt="Configurações do iio_dummy driver no menuconfig" />
+          <figcaption>
+            Habilitando as configurações do <code>iio_dummy</code>:
+            <em>IIO callback buffer used for push in-kernel interfaces</em>,
+            <em>Industrial I/O buffering based on kfifo</em>,
+            <em>Enable IIO configuration via configfs</em>,
+            <em>Enable software IIO device support</em> e
+            <em>Enable software triggers support</em>.
+          </figcaption>
+        </figure>
+        <figure>
+          <img src="../images/report-06/04-iio-example-driver.png"
+            alt="Opção do iio example driver com Event generation e Buffered capture support" />
+          <figcaption>
+            Ativando <em>Event generation</em> e <em>Buffered capture support</em> no driver de exemplo
+          </figcaption>
+        </figure>
+        <p>
+          Após ativar o <code>iio_dummy</code>, confirmei a configuração gerada no <code>.config</code>:
+        </p>
+        <pre data-lang="bash"><code>#
+# IIO dummy driver
+#
+CONFIG_IIO_DUMMY_EVGEN=m
+CONFIG_IIO_SIMPLE_DUMMY=m
+CONFIG_IIO_SIMPLE_DUMMY_EVENTS=y
+CONFIG_IIO_SIMPLE_DUMMY_BUFFER=y
+# end of IIO dummy driver</code></pre>
+      </section>
+
+      <section class="relato-section" id="compilar">
+        <h2>3) Compilar, Load e Unload do iio_dummy</h2>
+        <p>
+          Para garantir que o <code>kw build</code> estava corretamente configurado com cross-compile para arm64:
+        </p>
+        <pre data-lang="bash"><code>(LK-DEV) ciziks-debian@ciziks:/home/lk_dev/iio$ kw config --show build
+[LOCAL ] build.arch=arm64
+[LOCAL ] build.kernel_img_name=Image.gz
+[LOCAL ] build.cross_compile=aarch64-linux-gnu-
+[LOCAL ] build.menu_config=nconfig
+[LOCAL ] build.doc_type=htmldocs
+[LOCAL ] build.cpu_scaling_factor=100</code></pre>
+        <p>
+          Rodei o <code>kw build</code> (ao invés do <code>make M=...</code> sugerido pelo tutorial, pois
+          esse último usa o gcc da máquina host, o que pode causar problemas com cross-compilation para arm64).
+        </p>
+        <p>
+          O <code>kw deploy --modules</code> apresentou o mesmo erro de incompatibilidade de formato de arquivo
+          que havia ocorrido anteriormente. Para contornar, enviei apenas os arquivos <code>.ko</code> do módulo
+          diretamente para a VM:
+        </p>
+        <pre data-lang="bash"><code>kw ssh --send drivers/iio/dummy/iio_dummy.ko
+kw ssh --send drivers/iio/dummy/iio_dummy_evgen.ko</code></pre>
+        <p>Dentro da VM, instalei os módulos manualmente:</p>
+        <pre data-lang="bash"><code>mkdir -p /lib/modules/$(uname -r)/kernel/drivers/iio/dummy
+cp iio_dummy.ko /lib/modules/`uname -r`/kernel/drivers/iio/dummy
+cp iio_dummy_evgen.ko /lib/modules/`uname -r`/kernel/drivers/iio/dummy
+depmod --quick</code></pre>
+        <p>Verificando as informações do módulo:</p>
+        <pre data-lang="bash"><code>root@localhost:~# modinfo iio_dummy
+filename:       /lib/modules/7.0.0-rc1-CIZIKS+/kernel/drivers/iio/dummy/iio_dummy.ko
+license:        GPL v2
+description:    IIO dummy driver
+author:         Jonathan Cameron &lt;jic23@kernel.org&gt;
+depends:        iio_dummy_evgen,industrialio-sw-device,industrialio-triggered-buffer
+intree:         Y
+name:           iio_dummy
+vermagic:       7.0.0-rc1-CIZIKS+ SMP preempt mod_unload aarch64</code></pre>
+        <p>Carregando o módulo com <code>modprobe</code>:</p>
+        <pre data-lang="bash"><code>root@localhost:~# modprobe iio_dummy
+root@localhost:~# lsmod | grep iio_dummy
+iio_dummy              12288  0
+industrialio_triggered_buffer    12288  1 iio_dummy
+industrialio_sw_device    12288  1 iio_dummy
+iio_dummy_evgen        16384  1 iio_dummy</code></pre>
+        <p>
+          Confirmando a presença do dispositivo no sysfs:
+        </p>
+        <pre data-lang="bash"><code>root@localhost:~# ls -l /sys/bus/iio/devices
+total 0
+lrwxrwxrwx 1 root root 0 Apr  6 20:29 iio_evgen -&gt; ../../../devices/iio_evgen
+
+root@localhost:~# ls -l /sys/bus/iio/devices/iio_evgen/
+total 0
+--w------- 1 root root 4096 Apr  6 20:29 poke_ev0
+--w------- 1 root root 4096 Apr  6 20:29 poke_ev1
+...
+--w------- 1 root root 4096 Apr  6 20:29 poke_ev9</code></pre>
+        <p>Para remover o módulo:</p>
+        <pre data-lang="bash"><code>sudo modprobe -r iio_dummy</code></pre>
+      </section>
+
+      <section class="relato-section" id="explorando">
+        <h2>4) Explorando o iio_dummy via configfs</h2>
+        <p>
+          O <strong>configfs</strong> é um sistema de arquivos virtual que permite criar e configurar objetos
+          do kernel em tempo de execução através de operações de diretório. Para montá-lo:
+        </p>
+        <pre data-lang="bash"><code>sudo mkdir /mnt/iio_experiments/
+sudo mount -t configfs none /mnt/iio_experiments/</code></pre>
+        <pre data-lang="bash"><code>root@localhost:~# ls /mnt/iio_experiments/
+iio  pci_ep</code></pre>
+        <p>
+          Embora o tutorial não deixe explícito, o diretório <code>iio/devices/</code> só existe enquanto o
+          módulo estiver carregado. Após rodar <code>modprobe iio_dummy</code>:
+        </p>
+        <pre data-lang="bash"><code>root@localhost:~# ls /mnt/iio_experiments/iio/devices/
+dummy</code></pre>
+        <p>Criando um novo dispositivo virtual:</p>
+        <pre data-lang="bash"><code>sudo mkdir /mnt/iio_experiments/iio/devices/dummy/my_glorious_dummy_device</code></pre>
+        <pre data-lang="bash"><code>root@localhost:~# ls -l /sys/bus/iio/devices/
+total 0
+lrwxrwxrwx 1 root root 0 Apr  6 20:34 iio:device0 -&gt; ../../../devices/iio:device0
+lrwxrwxrwx 1 root root 0 Apr  6 20:34 iio_evgen -&gt; ../../../devices/iio_evgen</code></pre>
+        <p>
+          O simples ato de criar um diretório no configfs instanciou um novo dispositivo IIO
+          (<code>iio:device0</code>) no sysfs.
+        </p>
+      </section>
+
+      <section class="relato-section" id="device0">
+        <h2>5) Inspecionando o iio:device0</h2>
+        <pre data-lang="bash"><code>root@localhost:~# ls -l /sys/bus/iio/devices/iio:device0/
+total 0
+drwxr-xr-x 2 root root    0 Apr  6 20:35 buffer
+drwxr-xr-x 2 root root    0 Apr  6 20:35 buffer0
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 current_timestamp_clock
+-r--r--r-- 1 root root 4096 Apr  6 20:35 dev
+drwxr-xr-x 2 root root    0 Apr  6 20:35 events
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_accel_x_calibbias
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_accel_x_calibscale
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_accel_x_raw
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_activity_running_input
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_activity_walking_input
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_sampling_frequency
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_steps_calibheight
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_steps_en
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_steps_input
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_voltage-voltage_scale
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_voltage0_offset
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_voltage0_raw
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_voltage0_scale
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_voltage1-voltage2_raw
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 in_voltage3-voltage4_raw
+-r--r--r-- 1 root root 4096 Apr  6 20:34 name
+-rw-r--r-- 1 root root 4096 Apr  6 20:35 out_voltage0_raw
+...</code></pre>
+        <p>Verificando alguns atributos, obtive os mesmos valores esperados pelo tutorial:</p>
+        <pre data-lang="bash"><code>root@localhost:~# cat /sys/bus/iio/devices/iio:device0/name
+my_glorious_dummy_device
+root@localhost:~# cat /sys/bus/iio/devices/iio:device0/in_accel_x_raw
+34
+root@localhost:~# cat /sys/bus/iio/devices/iio:device0/in_voltage0_raw
+73</code></pre>
+        <p>
+          Antes de prosseguir com as modificações, removi o dispositivo para evitar um <em>oops</em>
+          mencionado no tutorial:
+        </p>
+        <pre data-lang="bash"><code>sudo rmdir /mnt/iio_experiments/iio/devices/dummy/my_glorious_dummy_device/</code></pre>
+      </section>
+
+      <section class="relato-section" id="modificando">
+        <h2>6) Modificando o Canal para Bússola 3-eixos</h2>
+        <p>
+          O experimento propõe adicionar suporte a um magnetômetro de 3 eixos (X, Y, Z) ao
+          <code>iio_simple_dummy</code>. As modificações foram feitas em dois arquivos:
+          <code>drivers/iio/dummy/iio_simple_dummy.h</code> e
+          <code>drivers/iio/dummy/iio_simple_dummy.c</code>.
+        </p>
+
+        <h3>6.1) Alterações no header (<code>iio_simple_dummy.h</code>)</h3>
+        <p>Adicionei a constante para o número de eixos e o buffer na struct de estado:</p>
+        <pre data-lang="c"><code>/* No início do arquivo */
+#define DUMMY_AXIS_XYZ 3
+
+/* Na struct iio_dummy_state */
+u16 buffer_compass[DUMMY_AXIS_XYZ];</code></pre>
+        <p>Adicionei os novos índices de scan no enum <code>iio_simple_dummy_scan_elements</code>:</p>
+        <pre data-lang="c"><code>DUMMY_INDEX_SOFT_TIMESTAMP,
+DUMMY_MAGN_X,
+DUMMY_MAGN_Y,
+DUMMY_MAGN_Z,</code></pre>
+
+        <h3>6.2) Adicionando canais em <code>iio_simple_dummy.c</code></h3>
+        <p>
+          No array <code>iio_dummy_channels[]</code>, adicionei três entradas para os eixos X, Y e Z
+          do magnetômetro ao final da struct:
+        </p>
+        <pre data-lang="c"><code>{
+    .type = IIO_MAGN,
+    .modified = 1,
+    .channel2 = IIO_MOD_X,
+    .info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
+    .info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE),
+    .scan_index = DUMMY_MAGN_X,
+    .scan_type = {
+        .sign = 'u',
+        .realbits = 16,
+        .storagebits = 16,
+        .shift = 0,
+    },
+},
+{
+    .type = IIO_MAGN,
+    .modified = 1,
+    .channel2 = IIO_MOD_Y,
+    .info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
+    .info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE),
+    .scan_index = DUMMY_MAGN_Y,
+    .scan_type = {
+        .sign = 'u',
+        .realbits = 16,
+        .storagebits = 16,
+        .shift = 0,
+    },
+},
+{
+    .type = IIO_MAGN,
+    .modified = 1,
+    .channel2 = IIO_MOD_Z,
+    .info_mask_separate = BIT(IIO_CHAN_INFO_RAW),
+    .info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE),
+    .scan_index = DUMMY_MAGN_Z,
+    .scan_type = {
+        .sign = 'u',
+        .realbits = 16,
+        .storagebits = 16,
+        .shift = 0,
+    },
+},</code></pre>
+        <p>
+          O tutorial também indicou trocar o número fixo <code>4</code> pelo símbolo correto em
+          <code>IIO_CHAN_SOFT_TIMESTAMP</code>:
+        </p>
+        <pre data-lang="c"><code>IIO_CHAN_SOFT_TIMESTAMP(DUMMY_INDEX_SOFT_TIMESTAMP)</code></pre>
+
+        <h3>6.3) Inicializando os valores no <code>iio_dummy_init_device</code></h3>
+        <pre data-lang="c"><code>st->buffer_compass[0] = 78;
+st->buffer_compass[1] = 10;
+st->buffer_compass[2] = 3;</code></pre>
+
+        <h3>6.4) Expandindo o <code>read_raw</code></h3>
+        <p>
+          Adicionei o novo caso <code>IIO_MAGN</code> em <code>__iio_dummy_read_raw</code> para expor
+          os dados ao user space:
+        </p>
+        <pre data-lang="c"><code>case IIO_MAGN:
+    switch(chan->scan_index) {
+        case DUMMY_MAGN_X:
+            *val = st->buffer_compass[0];
+            break;
+        case DUMMY_MAGN_Y:
+            *val = st->buffer_compass[1];
+            break;
+        case DUMMY_MAGN_Z:
+            *val = st->buffer_compass[2];
+            break;
+        default:
+            *val = 99;
+            break;
+    }
+    return IIO_VAL_INT;</code></pre>
+        <p>E adicionei o suporte ao scale do magnetômetro em <code>IIO_CHAN_INFO_SCALE</code>:</p>
+        <pre data-lang="c"><code>case IIO_MAGN:
+    *val = 0;
+    *val2 = 2;
+    ret = IIO_VAL_INT_PLUS_MICRO;
+    break;</code></pre>
+
+        <h3>6.5) Atualizando a descrição do módulo</h3>
+        <pre data-lang="c"><code>MODULE_DESCRIPTION("IIO dummy driver -> IIO dummy modified by Lucas Ciziks");</code></pre>
+        <p>
+          Não foi necessário alterar o <code>iio_dummy_write_raw</code>, pois ele apenas escreve diretamente
+          na struct de estado, sem distinção por tipo de canal.
+        </p>
+      </section>
+
+      <section class="relato-section" id="resultado">
+        <h2>7) Resultado Final</h2>
+        <p>
+          Após recompilar e reinstalar o módulo na VM, os novos atributos apareceram corretamente:
+        </p>
+        <figure>
+          <img src="../images/report-06/05-result.png"
+            alt="Saída do modinfo iio_dummy com a nova descrição do módulo" />
+          <figcaption>Módulo compilado e carregado com a nova descrição</figcaption>
+        </figure>
+        <figure>
+          <img src="../images/report-06/06-result-ls.png"
+            alt="Listagem de /sys/bus/iio/devices/iio:device0/ com os novos atributos in_magn_x_raw, in_magn_y_raw e in_magn_z_raw" />
+          <figcaption>Novos atributos <code>in_magn_*_raw</code> visíveis no sysfs</figcaption>
+        </figure>
+        <p>Verificando cada eixo individualmente:</p>
+        <pre data-lang="bash"><code>root@localhost:~# cat /sys/bus/iio/devices/iio:device0/in_magn_scale
+0.000002
+root@localhost:~# cat /sys/bus/iio/devices/iio:device0/in_magn_x_raw
+78
+root@localhost:~# cat /sys/bus/iio/devices/iio:device0/in_magn_y_raw
+10
+root@localhost:~# cat /sys/bus/iio/devices/iio:device0/in_magn_z_raw
+3</code></pre>
+        <p>
+          Os valores batem exatamente com os inicializados no <code>iio_dummy_init_device</code>.
+          <strong>Tutoriais 7 e 8 concluídos!</strong>
+        </p>
+        <p>
+          Os tutoriais são bastante informativos, mas acredito que poderiam ser melhorados com exemplos
+          usando o <code>kw</code> e com o uso de <code>diff</code> nas modificações sugeridas para tornar
+          as mudanças mais explícitas.
+        </p>
+      </section>
     </div>
 
-    <div class="relato-hero">
-      <div class="tut-label">
-        <span class="tut-number">Relato 06</span>
-        <span class="badge badge-pending">Pendente</span>
-      </div>
-      <h1>Introdução ao subsistema Industrial I/O (IIO)</h1>
-      <div class="tags">
-        <span class="tag">IIO</span>
-      </div>
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-05.html">← Enviando Patches por Email</a>
+      <a href="relato-07.html">Enviando Patches →</a>
     </div>
+  </main>
 
-    <main>
-      <div class="doc-content">
-        <div class="placeholder-card">
-          <div class="icon">🚧</div>
-          <h3>Trabalho em progresso</h3>
-          <p>Este relato será escrito assim que o tutorial for realizado.</p>
-        </div>
-      </div>
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
 
-      <hr class="nav-divider" />
-      <div class="tut-nav">
-        <a href="relato-05.html">← KWorkflow (kw)</a>
-        <a href="relato-07.html">Enviando Patches →</a>
-      </div>
-    </main>
-
-    <footer>
-      <p>
-        <a href="../index.html">← Voltar ao início</a>
-        &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
-      </p>
-    </footer>
-
-  </body>
 </html>
