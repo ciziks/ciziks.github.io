@@ -1,52 +1,608 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Relato 07 — MAC0470</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
-    <link rel="stylesheet" href="../style.css" />
-  </head>
-  <body>
 
-    <div class="top-nav">
-      <a href="../index.html">← Ciclo Kernel Linux</a>
-      <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relato 07 — MAC0470</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Ciclo Kernel Linux</a>
+    <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Relato 07</span>
+      <span class="tut-date">· 14/04/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>Contribuição no Kernel Linux — Subsistema IIO</h1>
+    <p class="description">
+      Substituição das chamadas <code>mutex_lock</code> e <code>mutex_unlock</code> pela macro
+      <code>guard(mutex)</code> e <code>scoped_guard(mutex)</code> no driver <code>ad7280a.c</code>
+      do subsistema IIO, seguida de compilação, testes, envio ao CI e submissão oficial aos mantenedores.
+    </p>
+    <div class="tags">
+      <span class="tag">IIO</span>
+      <span class="tag">kernel</span>
+      <span class="tag">patch</span>
+      <span class="tag">mutex</span>
+      <span class="tag">guard</span>
+      <span class="tag">kw</span>
+      <span class="tag">contribuição</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#introducao">1) Introdução</a></li>
+          <li><a href="#desenvolvimento">2) Desenvolvimento</a></li>
+          <li><a href="#alterando">3) Alterando mutex_lock</a></li>
+          <li><a href="#compilando">4) Garantindo que as mudanças sejam compiladas</a></li>
+          <li><a href="#commits">5) Criando os commits atômicos</a></li>
+          <li><a href="#ci">6) Enviando para o CI</a></li>
+          <li><a href="#oficial">7) Enviando o Patch oficialmente</a></li>
+          <li><a href="#feedback">8) Aguardando Feedback</a></li>
+        </ol>
+      </nav>
+
+      <!-- ── 1) Introdução ── -->
+      <section class="relato-section" id="introducao">
+        <h2>1) Introdução</h2>
+        <p>
+          <i>Referência:
+            <a href="https://flusp.ime.usp.br/courses/linux-kernel-patch-suggestions/" target="_blank">
+              FLUSP — Sugestões de Patches para o Kernel Linux (Sugestão 1)
+            </a>
+          </i>
+        </p>
+        <p>
+          Com base nas sugestões disponíveis no site do FLUSP, eu e minha dupla na disciplina
+          (<strong>Felipe Ribeiro de Souza</strong>) decidimos seguir a <em>Sugestão 1</em>:
+          <em>Replace <code>mutex_lock(&amp;lock)</code> and <code>mutex_unlock(&amp;lock)</code> calls
+          with <code>guard(mutex)(&amp;lock)</code></em>.
+        </p>
+        <p>
+          A ideia é substituir o uso manual de <code>mutex_lock</code> e <code>mutex_unlock</code>,
+          que pode gerar dois problemas principais:
+        </p>
+        <ol>
+          <li>O desenvolvedor pode esquecer de chamar <code>mutex_unlock</code>, principalmente em fluxos condicionais (como <code>switch/case</code>).</li>
+          <li>Para contornar isso, muitos desenvolvedores usam o padrão <code>goto error</code>, centralizando o unlock no final.</li>
+        </ol>
+        <p>Esse padrão típico é exemplificado assim:</p>
+        <pre data-lang="c"><code>int function_with_mutex_and_goto_error_pattern(void)
+{
+    int ret = 0;
+
+    mutex_lock(&lock);
+    switch (var) {
+    case FOO:
+        do_foo();
+        break;
+    case BAR:
+        ret = do_first_bar();
+        if (ret)
+            goto out;
+
+        ret = do_second_bar();
+        if (ret)
+            goto out;
+
+        do_third_bar();
+        break;
+    default:
+        ret = -EINVAL;
+    }
+
+out:
+    mutex_unlock(&lock);
+    return ret;
+}</code></pre>
+        <p>
+          A solução é implementar a macro <code>guard(mutex)(&amp;lock)</code>, definida em
+          <a href="https://docs.kernel.org/core-api/cleanup.html" target="_blank">docs.kernel.org/core-api/cleanup.html</a>,
+          que libera o mutex automaticamente ao sair do escopo (por qualquer caminho: <code>return</code>, fim da função, etc.).
+          Assim, sem perda de funcionalidade, o código fica:
+        </p>
+        <pre data-lang="c"><code>int function_with_guard_mutex(void)
+{
+    int ret = 0;
+
+    guard(mutex)(&lock);
+    switch (var) {
+    case FOO:
+        do_foo();
+        return 0;
+    case BAR:
+        ret = do_first_bar();
+        if (ret)
+            return ret;
+
+        ret = do_second_bar();
+        if (ret)
+            return ret;
+
+        do_third_bar();
+        return 0;
+    default:
+        return -EINVAL;
+    }
+}</code></pre>
+        <p>Após discussão com os monitores, optamos por seguir esse caminho.</p>
+      </section>
+
+      <!-- ── 2) Desenvolvimento ── -->
+      <section class="relato-section" id="desenvolvimento">
+        <h2>2) Desenvolvimento</h2>
+        <p>
+          <i>Referência:
+            <a href="https://pad.riseup.net/p/DSL-USP-2026-kernel-patch-submission-keep" target="_blank">
+              Pad colaborativo — Kernel Patch Submission
+            </a>
+          </i>
+        </p>
+        <p>
+          O primeiro passo foi atualizar a kernel tree do IIO, subsistema em que já estávamos trabalhando desde
+          os tutoriais anteriores. Como já estava na branch <code>testing</code>, executei:
+        </p>
+        <pre data-lang="bash"><code>git stash   # remover mudanças dos tutoriais de exemplo
+git pull    # atualizar com os commits mais recentes</code></pre>
+        <p>
+          O pull demorou um pouco (mais de 2,5 GB de dados), apontando como último commit:
+          <code>d2a4ec19d2a2e54c23b5180e939994d3da4a6b91</code>.
+        </p>
+        <p>
+          Após isso, eu e Felipe exploramos o diretório <code>drivers/iio/adc</code> em busca de arquivos com
+          o padrão <code>mutex_lock</code>/<code>mutex_unlock</code>. Encontramos dois candidatos com 5 ocorrências cada:
+          <code>ad7280a.c</code> (eu) e <code>ingenic-adc.c</code> (Felipe).
+        </p>
+        <p>Criei uma branch para isolar minhas alterações:</p>
+        <pre data-lang="bash"><code>git switch testing
+git checkout -b replace-mutex</code></pre>
+        <p>
+          Com base no
+          <a href="https://ciziks.github.io/mac0470/reports/relato-02.html" target="_blank">Tutorial 2</a>,
+          configurei o kw e subi a VM de desenvolvimento:
+        </p>
+        <pre data-lang="bash"><code>kw init
+sudo systemctl start libvirtd
+sudo virsh start arm64
+sudo virsh net-start default
+sudo virsh net-dhcp-leases default   # IP: 192.168.122.91
+kw remote --add arm64 root@192.168.122.91 --set-default</code></pre>
+        <p>A conexão foi testada com <code>kw ssh</code> e estabelecida com sucesso.</p>
+        <p>Dentro da IIO_TREE, gerei e atualizei o arquivo de configuração padrão para ARM64:</p>
+        <pre data-lang="bash"><code>ciziks-debian@ciziks:/home/lk_dev/iio$ make ARCH=arm64 defconfig
+*** Default configuration is based on 'defconfig'
+#
+# configuration written to .config
+#
+ciziks-debian@ciziks:/home/lk_dev/iio$ make ARCH=arm64 olddefconfig
+#
+# No change to .config
+#</code></pre>
+        <p>Salvei o <code>.config</code> com o kw kernel-config-manager:</p>
+        <pre data-lang="bash"><code>ciziks-debian@ciziks:/home/lk_dev/iio$ kw kernel-config-manager --save arm64-mutex-changes
+Saved kernel config 'arm64-mutex-changes'
+ciziks-debian@ciziks:/home/lk_dev/iio$ kw kernel-config-manager --list
+List of .config files managed by kw
+Name                 Description  Last updated
+-------------------  -----------  -------------------
+arm64-optimized                   2026-03-05 12:24:26
+arm64-mutex-changes               2026-04-10 15:08:10
+ciziks-debian@ciziks:/home/lk_dev/iio$ kw kernel-config-manager --get arm64-mutex-changes
+This operation will override the current .config file
+Are you sure that you want to proceed? [y/N]: y
+Current config file updated based on arm64-mutex-changes</code></pre>
+        <p>Em seguida, rodei <code>kw build --menu</code> e alterei o nome da kernel release para <code>-CIZIKS-MUTEX</code>:</p>
+        <figure>
+          <img src="../images/report-07/01-change-name.png"
+            alt="Tela do kw build --menu alterando o nome da kernel release para -CIZIKS-MUTEX" />
+          <figcaption>Alterando o nome da kernel release no menu de configuração</figcaption>
+        </figure>
+        <p>Configurei o kw para compilação cruzada:</p>
+        <pre data-lang="bash"><code>ciziks-debian@ciziks:/home/lk_dev/iio$ kw config build.arch 'arm64'
+ciziks-debian@ciziks:/home/lk_dev/iio$ kw config build.cross_compile 'aarch64-linux-gnu-'
+ciziks-debian@ciziks:/home/lk_dev/iio$ kw config build.kernel_img_name 'Image.gz'
+ciziks-debian@ciziks:/home/lk_dev/iio$ kw config --show build
+[LOCAL ] build.arch=arm64
+[LOCAL ] build.kernel_img_name=Image.gz
+[LOCAL ] build.cross_compile=aarch64-linux-gnu-
+[LOCAL ] build.menu_config=nconfig
+[LOCAL ] build.doc_type=htmldocs
+[LOCAL ] build.cpu_scaling_factor=100
+[      ] build.enable_ccache=N/A
+[      ] build.warning_level=N/A
+[      ] build.use_llvm=N/A
+[      ] build.cflags=N/A</code></pre>
+        <p>
+          Rodei <code>kw build</code> (demorou ~20 minutos, pois não utilizei o <code>vm_mod_list</code>).
+          Após <code>kw deploy --modules</code> e boot da VM:
+        </p>
+        <pre data-lang="bash"><code>root@localhost:~# uname --kernel-release
+7.0.0-rc4-CIZIKS-MUTEX+</code></pre>
+        <p>Confirmando que o <code>.config</code> estava correto.</p>
+      </section>
+
+      <!-- ── 3) Alterando mutex_lock ── -->
+      <section class="relato-section" id="alterando">
+        <h2>3) Alterando mutex_lock</h2>
+        <p>
+          O método de mudança seguiu cinco passos simples:
+        </p>
+        <ol>
+          <li>Localizar as funções que possuíam <code>mutex_lock</code> e <code>mutex_unlock</code>.</li>
+          <li>Verificar se faz sentido aplicar o novo padrão.</li>
+          <li>Verificar se apenas uma porção da função lida com o mutex (usar <code>scoped_guard</code>) ou se toda a função precisa (usar <code>guard</code>).</li>
+          <li>Implementar a respectiva macro.</li>
+          <li>Remover o <code>mutex_lock</code> e o <code>mutex_unlock</code>.</li>
+        </ol>
+
+        <h3>3.1) Usando <code>scoped_guard</code> em <code>ad7280_store_balance_sw</code></h3>
+        <p>A primeira função alterada foi <code>ad7280_store_balance_sw</code>. Como o mutex protegia apenas
+          uma porção interna da função (e havia código antes dele), usamos <code>scoped_guard</code>:</p>
+        <pre data-lang="c"><code>/* Antes */
+mutex_lock(&st->lock);
+if (readin)
+    st->cb_mask[devaddr] |= BIT(ch);
+else
+    st->cb_mask[devaddr] &= ~BIT(ch);
+
+ret = ad7280_write(st, devaddr, AD7280A_CELL_BALANCE_REG, 0,
+           FIELD_PREP(AD7280A_CELL_BALANCE_CHAN_BITMAP_MSK,
+                  st->cb_mask[devaddr]));
+mutex_unlock(&st->lock);</code></pre>
+        <pre data-lang="c"><code>/* Depois */
+scoped_guard(mutex, &st->lock) {
+    if (readin)
+        st->cb_mask[devaddr] |= BIT(ch);
+    else
+        st->cb_mask[devaddr] &= ~BIT(ch);
+
+    ret = ad7280_write(st, devaddr, AD7280A_CELL_BALANCE_REG, 0,
+               FIELD_PREP(AD7280A_CELL_BALANCE_CHAN_BITMAP_MSK,
+                      st->cb_mask[devaddr]));
+}</code></pre>
+        <p>O mesmo padrão de <code>scoped_guard</code> foi aplicado às funções
+          <code>ad7280_show_balance_timer</code>, <code>ad7280_store_balance_timer</code> e
+          <code>ad7280_read_raw</code>.</p>
+
+        <h3>3.2) Usando <code>guard</code> em <code>ad7280a_write_thresh</code></h3>
+        <p>
+          Para a função <code>ad7280a_write_thresh</code>, que continha um <code>switch/case</code> com
+          o padrão <code>goto err_unlock</code>, utilizamos <code>guard(mutex)</code>, o unlock acontece
+          automaticamente em qualquer <code>return</code>. Também foi necessário substituir os <code>break</code>
+          intermediários por <code>return</code>:
+        </p>
+        <pre data-lang="c"><code>/* Antes */
+mutex_lock(&st->lock);
+switch (chan->type) {
+case IIO_VOLTAGE:
+    ...
+    switch (dir) {
+    case IIO_EV_DIR_RISING:
+        ...
+        if (ret)
+            break;
+        st->cell_threshhigh = value;
+        break;
+    ...
+    default:
+        ret = -EINVAL;
+        goto err_unlock;
+    }
+    break;
+...
+default:
+    ret = -EINVAL;
+    goto err_unlock;
+}
+err_unlock:
+    mutex_unlock(&st->lock);
+    return ret;</code></pre>
+        <pre data-lang="c"><code>/* Depois */
+guard(mutex)(&st->lock);
+
+switch (chan->type) {
+case IIO_VOLTAGE:
+    ...
+    switch (dir) {
+    case IIO_EV_DIR_RISING:
+        ...
+        if (ret)
+            return ret;
+        st->cell_threshhigh = value;
+        return 0;
+    case IIO_EV_DIR_FALLING:
+        ...
+        if (ret)
+            return ret;
+        st->cell_threshlow = value;
+        return 0;
+    default:
+        return -EINVAL;
+    }
+case IIO_TEMP:
+    ...
+    switch (dir) {
+    case IIO_EV_DIR_RISING:
+        ...
+        if (ret)
+            return ret;
+        st->aux_threshhigh = value;
+        return 0;
+    case IIO_EV_DIR_FALLING:
+        ...
+        if (ret)
+            return ret;
+        st->aux_threshlow = value;
+        return 0;
+    default:
+        return -EINVAL;
+    }
+default:
+    return -EINVAL;
+}</code></pre>
+
+        <p>O que mudou em <code>ad7280a_write_thresh</code>:</p>
+        <table style="width:100%; border-collapse: collapse; margin: 1rem 0;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 0.5rem; border-bottom: 2px solid var(--border)">Antes</th>
+              <th style="text-align:left; padding: 0.5rem; border-bottom: 2px solid var(--border)">Depois</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)"><code>mutex_lock</code> + <code>mutex_unlock</code> manual</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)"><code>guard(mutex)(&amp;st->lock)</code> = unlock automático</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)"><code>goto err_unlock</code> para todos os erros</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)"><code>return -EINVAL</code> direto, sem rótulo</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)"><code>err_unlock:</code> + <code>mutex_unlock</code> + <code>return ret</code> no final</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Removidos completamente</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem"><code>ret</code> usada em todos os caminhos</td>
+              <td style="padding: 0.5rem"><code>ret</code> só onde <code>ad7280_write</code> pode falhar</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ── 4) Compilando ── -->
+      <section class="relato-section" id="compilando">
+        <h2>4) Garantindo que as mudanças sejam compiladas</h2>
+        <p>
+          Para garantir que o <code>ad7280a.c</code> estava sendo compilado, segui a dica do pad: procurar
+          no <code>Kconfig</code> do diretório <code>adc</code> pela entrada correspondente ao arquivo:
+        </p>
+        <pre data-lang="kconfig"><code>config AD7280
+    tristate "Analog Devices AD7280A Lithium Ion Battery Monitoring System"
+    depends on SPI
+    select CRC8
+    help
+      Say yes here to build support for Analog Devices AD7280A
+      Lithium Ion Battery Monitoring System.
+
+      To compile this driver as a module, choose M here: the
+      module will be called ad7280a</code></pre>
+        <p>Dentro do <code>kw build --menu</code>, pesquisei por <code>AD7280</code>:</p>
+        <figure>
+          <img src="../images/report-07/02-search.png"
+            alt="Busca por AD7280 no menu de configuração do kernel" />
+          <figcaption>Buscando por <code>AD7280</code> no menu de configuração</figcaption>
+        </figure>
+        <figure>
+          <img src="../images/report-07/03-search-result.png"
+            alt="Resultado da busca mostrando a opção AD7280A no menuconfig" />
+          <figcaption>Resultado encontrado: driver <code>AD7280A</code></figcaption>
+        </figure>
+        <p>Como as dependências IIO e SPI já estavam ativas, bastou habilitar o <code>AD7280</code>:</p>
+        <figure>
+          <img src="../images/report-07/04-activating-ad7280a.png"
+            alt="Ativando o driver AD7280A no menuconfig" />
+          <figcaption>Ativando o driver <code>AD7280A</code> no menuconfig</figcaption>
+        </figure>
+        <p>
+          Após salvar o <code>.config</code>, adicionei uma diretiva de erro para verificar
+          se o arquivo estava sendo compilado:
+        </p>
+        <pre data-lang="c"><code>#error "THIS FILE IS BEING COMPILED - MUTEX TEST"</code></pre>
+        <p>Rodando <code>kw build</code>:</p>
+        <pre data-lang="bash"><code>ciziks-debian@ciziks:/home/lk_dev/iio$ kw build
+  CALL    scripts/checksyscalls.sh
+  CC [M]  drivers/iio/adc/ad7280a.o
+drivers/iio/adc/ad7280a.c:27:2: error: #error "THIS FILE IS BEING COMPILED - MUTEX TEST"
+   27 | #error "THIS FILE IS BEING COMPILED - MUTEX TEST"
+      |  ^~~~~
+make[5]: *** [scripts/Makefile.build:289: drivers/iio/adc/ad7280a.o] Error 1
+...
+-> Execution time: 00:00:06</code></pre>
+        <p>O arquivo está sendo compilado! Removendo o <code>#error</code> e rodando novamente:</p>
+        <pre data-lang="bash"><code>ciziks-debian@ciziks:/home/lk_dev/iio$ kw build
+  CALL    scripts/checksyscalls.sh
+  CC [M]  drivers/iio/adc/ad7280a.o
+  AR      built-in.a
+  AR      vmlinux.a
+  LD      vmlinux.o
+  MODPOST Module.symvers
+  UPD     include/generated/utsversion.h
+  CC      init/version-timestamp.o
+  KSYMS   .tmp_vmlinux0.kallsyms.S
+  ...
+  LD [M]  drivers/iio/adc/ad7280a.ko
+  ...
+  GZIP    arch/arm64/boot/Image.gz
+-> Execution time: 00:00:24</code></pre>
+        <p>
+          Como o <code>kw deploy --modules</code> não estava funcionando, utilizei o mesmo caminho do tutorial 4:
+          montei a imagem de disco com <code>guestmount</code> e instalei os módulos diretamente na imagem:
+        </p>
+        <pre data-lang="bash"><code>sudo guestmount --rw --add "${VM_DIR}/arm64_img.qcow2" \
+  --mount /dev/vda2 "${VM_DIR}/arm64_rootfs"
+
+sudo --preserve-env make -C "${IIO_TREE}" \
+  INSTALL_MOD_PATH="${VM_DIR}/arm64_rootfs" modules_install</code></pre>
+        <p>Dentro da VM, verificando o módulo:</p>
+        <pre data-lang="bash"><code>root@localhost:~# modinfo ad7280a
+filename:       /lib/modules/7.0.0-rc4-CIZIKS-MUTEX+/kernel/drivers/iio/adc/ad7280a.ko
+license:        GPL v2
+description:    Analog Devices AD7280A
+author:         Michael Hennerich &lt;michael.hennerich@analog.com&gt;
+alias:          spi:ad7280a
+depends:
+intree:         Y
+name:           ad7280a
+vermagic:       7.0.0-rc4-CIZIKS-MUTEX+ SMP preempt mod_unload aarch64</code></pre>
+        <p>Testando o carregamento do módulo:</p>
+        <pre data-lang="bash"><code>root@localhost:~# sudo modprobe ad7280a
+root@localhost:~# lsmod | grep ad7280
+ad7280a                16384  0</code></pre>
+        <p>
+          As alterações estão funcionando corretamente. O módulo compila, instala e carrega sem erros.
+          Para um teste completo seria necessário o hardware real ou um dispositivo SPI simulado, mas o módulo
+          carregando limpo já valida que a refatoração não quebrou nada estruturalmente.
+        </p>
+      </section>
+
+      <!-- ── 5) Commits ── -->
+      <section class="relato-section" id="commits">
+        <h2>5) Criando os commits atômicos</h2>
+        <pre data-lang="bash"><code>git add drivers/iio/adc/ad7280a.c
+git commit --signoff \
+  --trailer='Co-developed-by: Felipe Ribeiro de Souza &lt;felipers@usp.br&gt;' \
+  --trailer='Signed-off-by: Felipe Ribeiro de Souza &lt;felipers@usp.br&gt;'</code></pre>
+        <p>A mensagem do commit, com o co-authorship da dupla:</p>
+        <figure>
+          <img src="../images/report-07/05-commit.png"
+            alt="Mensagem do commit atômico com signoff e co-authorship de Felipe" />
+          <figcaption>Commit atômico com <code>Signed-off-by</code> e <code>Co-developed-by</code></figcaption>
+        </figure>
+        <p>
+          Antes de enviar para o CI, verifiquei possíveis problemas de coding style com:
+        </p>
+        <pre data-lang="bash"><code>git format-patch -1 --stdout | ./scripts/checkpatch.pl --</code></pre>
+        <p>Após resolver os problemas de espaços e tabs, o commit estava 100% limpo.</p>
+      </section>
+
+      <!-- ── 6) CI ── -->
+      <section class="relato-section" id="ci">
+        <h2>6) Enviando para o CI</h2>
+        <p>Antes de enviar, simulei o envio para verificar que tudo estava correto:</p>
+        <pre data-lang="bash"><code>kw send-patch --send -1 --simulate --private \
+  --to=kernel@lists.ime.usp.br \
+  --cc=lucas@ciziks.com \
+  --cc=felipers@usp.br</code></pre>
+        <figure>
+          <img src="../images/report-07/06-simulate.png"
+            alt="Saída do kw send-patch --simulate mostrando os destinatários do patch" />
+          <figcaption>Simulação do envio com <code>--simulate</code></figcaption>
+        </figure>
+        <p>
+          Após confirmar que estava correto, enviei para a lista <code>kernel@lists.ime.usp.br</code>
+          (com minha dupla em cópia). Recebi o seguinte e-mail de retorno:
+        </p>
+        <figure>
+          <img src="../images/report-07/07-email.png"
+            alt="E-mail recebido indicando que a mensagem está aguardando aprovação do moderador" />
+          <figcaption>
+            E-mail indicando que o patch precisava de aprovação dos moderadores,
+            pois foi enviado de um e-mail pessoal (não da USP)
+          </figcaption>
+        </figure>
+        <p>
+          Após uma troca rápida de e-mails com os monitores, meu commit foi aprovado e executado via CI
+          no pipeline designado:
+        </p>
+        <figure>
+          <img src="../images/report-07/08-pipeline.png"
+            alt="Resultado do pipeline de CI mostrando os estágios build e test passando com sucesso" />
+          <figcaption>Pipeline de CI concluído com sucesso: build e test passaram</figcaption>
+        </figure>
+        <p>
+          O envio do patchset acionou o CI local, onde o patch foi aplicado à kernel tree correspondente,
+          compilado e inicializado em uma VM com um teste básico de boot cycle. Todos os estágios passaram.
+        </p>
+      </section>
+
+      <!-- ── 7) Envio oficial ── -->
+      <section class="relato-section" id="oficial">
+        <h2>7) Enviando o Patch oficialmente</h2>
+        <p>Após aprovação do CI, simulei o envio para os mantenedores oficiais:</p>
+        <pre data-lang="bash"><code>kw send-patch --send -1 --simulate</code></pre>
+        <pre data-lang="bash"><code>Dry-OK. Log says:
+Server: smtp.protonmail.ch
+MAIL FROM:&lt;lucas@ciziks.com&gt;
+RCPT TO:&lt;lars@metafoo.de&gt;
+RCPT TO:&lt;Michael.Hennerich@analog.com&gt;
+RCPT TO:&lt;jic23@kernel.org&gt;
+RCPT TO:&lt;dlechner@baylibre.com&gt;
+RCPT TO:&lt;nuno.sa@analog.com&gt;
+RCPT TO:&lt;andy@kernel.org&gt;
+RCPT TO:&lt;felipers@usp.br&gt;
+RCPT TO:&lt;linux-iio@vger.kernel.org&gt;
+From: Lucas Ivars Cadima Ciziks &lt;lucas@ciziks.com&gt;
+To: lars@metafoo.de,
+    Michael.Hennerich@analog.com,
+    jic23@kernel.org,
+    dlechner@baylibre.com,
+    nuno.sa@analog.com,
+    andy@kernel.org
+Cc: Felipe Ribeiro de Souza &lt;felipers@usp.br&gt;,
+    linux-iio@vger.kernel.org
+Subject: [PATCH] iio: adc: ad7280a: use cleanup helpers guard() and scoped_guard() for mutex locking
+Date: Tue, 14 Apr 2026 16:15:22 -0300
+Message-ID: &lt;20260414194548.5746-1-lucas@ciziks.com&gt;
+X-Mailer: git-send-email 2.47.3
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit</code></pre>
+        <p>Tudo correto. Enviei para os mantenedores oficiais e a respectiva lista de discussão:</p>
+        <pre data-lang="bash"><code>kw send-patch --send -1</code></pre>
+        <p>
+          O patch foi enviado para os mantenedores do subsistema IIO
+          (<code>lars@metafoo.de</code>, <code>jic23@kernel.org</code>, <code>Michael.Hennerich@analog.com</code>,
+          entre outros) e para a lista <code>linux-iio@vger.kernel.org</code>.
+        </p>
+      </section>
+
+      <!-- ── 8) Feedback ── -->
+      <section class="relato-section" id="feedback">
+        <h2>8) Aguardando Feedback</h2>
+        <p>
+          Até o momento, estamos aguardando o feedback dos mantenedores oficiais para implementar
+          possíveis correções ou melhorias sugeridas. <em>Work in Progress...</em>
+        </p>
+      </section>
+
     </div>
 
-    <div class="relato-hero">
-      <div class="tut-label">
-        <span class="tut-number">Relato 07</span>
-        <span class="badge badge-pending">Pendente</span>
-      </div>
-      <h1>Contribuição no Kernel IIO</h1>
-      <div class="tags">
-        <span class="tag">patches</span>
-      </div>
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-06.html">← Subsistema IIO</a>
+      <a href="#" class="disabled">Próximo relato →</a>
     </div>
+  </main>
 
-    <main>
-      <div class="doc-content">
-        <div class="placeholder-card">
-          <div class="icon">🚧</div>
-          <h3>Trabalho em progresso</h3>
-          <p>Este relato será escrito assim que o tutorial for realizado.</p>
-        </div>
-      </div>
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
 
-      <hr class="nav-divider" />
-      <div class="tut-nav">
-        <a href="relato-06.html">← Subsistema IIO</a>
-        <a href="#" class="disabled">Próximo relato →</a>
-      </div>
-    </main>
-
-    <footer>
-      <p>
-        <a href="../index.html">← Voltar ao início</a>
-        &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
-      </p>
-    </footer>
-
-  </body>
 </html>
