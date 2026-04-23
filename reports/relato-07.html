@@ -18,7 +18,7 @@
   <div class="relato-hero">
     <div class="tut-label">
       <span class="tut-number">Relato 07</span>
-      <span class="tut-date">· 14/04/2026</span>
+      <span class="tut-date">· 10/04/2026</span>
       <span class="badge badge-done">Completo</span>
     </div>
     <h1>Contribuição no Kernel Linux - Subsistema IIO</h1>
@@ -45,7 +45,7 @@
         <h3>Sumário</h3>
         <ol>
           <li><a href="#introducao">1) Introdução</a></li>
-          <li><a href="#desenvolvimento">2) Desenvolvimento</a></li>
+          <li><a href="#desenvolvimento">2) Desenvolvimento v1</a></li>
           <li><a href="#alterando">3) Alterando mutex_lock</a></li>
           <li><a href="#compilando">4) Garantindo que as mudanças sejam compiladas</a></li>
           <li><a href="#commits">5) Criando os commits atômicos</a></li>
@@ -53,6 +53,7 @@
           <li><a href="#oficial">7) Enviando o Patch oficialmente</a></li>
           <li><a href="#v2">8) Desenvolvimento v2</a></li>
           <li><a href="#v3">9) Desenvolvimento v3</a></li>
+          <li><a href="#v4">10) Desenvolvimento v4</a></li>
         </ol>
       </nav>
 
@@ -144,7 +145,7 @@ out:
 
       <!-- ── 2) Desenvolvimento ── -->
       <section class="relato-section" id="desenvolvimento">
-        <h2>2) Desenvolvimento</h2>
+        <h2>2) Desenvolvimento v1 <small style="font-weight:normal; color: var(--text-muted)">· 10/04/2026</small></h2>
         <p>
           <i>Referência:
             <a href="https://pad.riseup.net/p/DSL-USP-2026-kernel-patch-submission-keep" target="_blank">
@@ -542,7 +543,7 @@ git commit --signoff \
 
       <!-- ── 7) Envio oficial ── -->
       <section class="relato-section" id="oficial">
-        <h2>7) Enviando o Patch oficialmente</h2>
+        <h2>7) Enviando o Patch oficialmente <small style="font-weight:normal; color: var(--text-muted)">· 14/04/2026</small></h2>
         <p>Após aprovação do CI, simulei o envio para os mantenedores oficiais:</p>
         <pre data-lang="bash"><code>kw send-patch --send -1 --simulate</code></pre>
         <pre data-lang="bash"><code>Dry-OK. Log says:
@@ -586,7 +587,7 @@ Content-Transfer-Encoding: 8bit</code></pre>
 
       <!-- ── 8) Desenvolvimento v2 ── -->
       <section class="relato-section" id="v2">
-        <h2>8) Desenvolvimento v2</h2>
+        <h2>8) Desenvolvimento v2 <small style="font-weight:normal; color: var(--text-muted)">· 15/04/2026</small></h2>
         <p>
           Em menos de 24 horas recebi uma réplica do revisor <strong>Andy Shevchenko</strong> apontando
           três problemas:
@@ -669,7 +670,7 @@ total: 0 errors, 0 warnings, 142 lines checked
 
       <!-- ── 9) Desenvolvimento v3 ── -->
       <section class="relato-section" id="v3">
-        <h2>9) Desenvolvimento v3</h2>
+        <h2>9) Desenvolvimento v3 <small style="font-weight:normal; color: var(--text-muted)">· 17/04/2026</small></h2>
         <p>
           Andy Shevchenko respondeu novamente, apontando (espero) a última correção necessária.
           O problema estava em <code>ad7280_show_balance_timer</code>:
@@ -735,7 +736,96 @@ v2:
           </a>
         </p>
         <p>
-          Aguardando (com muita fé) a resposta final dos mantenedores. <em>Work in Progress...</em>
+          Aguardando resposta dos mantenedores... o que veio 6 dias depois, com mais uma rodada de revisão.
+        </p>
+      </section>
+
+      <!-- ── 10) Desenvolvimento v4 ── -->
+      <section class="relato-section" id="v4">
+        <h2>10) Desenvolvimento v4 <small style="font-weight:normal; color: var(--text-muted)">· 23/04/2026</small></h2>
+        <p>
+          Após 5 dias sem nenhum retorno dos revisores, comecei a investigar a lore do kernel IIO. Percebi que
+          todos os patches da lista estavam sendo respondidos, exceto o meu. Curiosamente, encontrei outro patch
+          com o mesmo tema, mesmo conteúdo e trabalhando no mesmo arquivo <code>ad7280a.c</code>!
+        </p>
+        <p>
+          Investigando com os monitores, descobri se tratar de <strong>Matheus Giarola</strong>, outro aluno
+          da USP realizando seu IC com o professor Paulo. Por coincidência, acabamos escolhendo exatamente o
+          mesmo tema e o mesmo arquivo.
+        </p>
+        <p>
+          Ao debater como prosseguir, decidimos continuar as alterações no meu patch, pois o dele já estava no
+          v5 e julgamos minha mensagem de commit um pouco mais descritiva, além do conteúdo do v5 dele estar
+          idêntico ao meu v3. Assim, o Matheus avisou os mantenedores que continuaríamos no meu patch:
+        </p>
+        <p>
+          <a href="https://lore.kernel.org/linux-iio/aeoMmhNTFybLWirf@ashevche-desk.local/T/#t" target="_blank">
+            Thread na lore - aviso do Matheus aos mantenedores
+          </a>
+        </p>
+
+        <h3>10.1) Melhoria de legibilidade em <code>ad7280_show_balance_timer</code></h3>
+        <p>
+          Um dos revisores sugeriu corrigir um problema de legibilidade na função
+          <code>ad7280_show_balance_timer</code> após o uso do <code>scoped_guard</code>, a linha com
+          a chamada a <code>ad7280_read_reg</code> estava extrapolando o limite de colunas:
+        </p>
+        <pre data-lang="c"><code>scoped_guard(mutex, &st->lock)
+        ret = ad7280_read_reg(st, chan->address >> 8,
+                    (chan->address & 0xFF) + AD7280A_CB1_TIMER_REG);</code></pre>
+        <p>
+          A sugestão de Andy Shevchenko foi extrair duas variáveis auxiliares para melhorar a legibilidade.
+          Inicialmente sugeriu <code>u8 addr</code> para <code>chan->address &amp; 0xFF</code>, mas em seguida
+          enviou uma segunda sugestão com a notação <code>s/addr/ch/</code>.
+        </p>
+        <p>
+          Eu desconhecia essa notação e, pesquisando, descobri que se refere à sintaxe de substituição do
+          <a href="https://www.gnu.org/software/sed/manual/sed.html" target="_blank">sed (GNU)</a>:
+          <code>s/regexp/replacement/</code>, ou seja, substitua <code>addr</code> por <code>ch</code>,
+          seguindo o modelo já usado em <code>ad7280_store_balance_sw</code>. A função final ficou:
+        </p>
+        <pre data-lang="c"><code>static ssize_t ad7280_show_balance_timer(struct iio_dev *indio_dev,
+					 uintptr_t private,
+					 const struct iio_chan_spec *chan,
+					 char *buf)
+{
+	struct ad7280_state *st = iio_priv(indio_dev);
+	u8 devaddr = chan->address >> 8;
+	u8 ch = chan->address & 0xFF;
+	unsigned int msecs;
+	int ret;
+
+	scoped_guard(mutex, &st->lock)
+		ret = ad7280_read_reg(st, devaddr, ch + AD7280A_CB1_TIMER_REG);
+
+	if (ret < 0)
+		return ret;
+
+	msecs = FIELD_GET(AD7280A_CB_TIMER_VAL_MSK, ret) * 71500;
+
+	return sysfs_emit(buf, "%u.%u\n", msecs / 1000, msecs % 1000);
+}</code></pre>
+
+        <h3>10.2) Adicionando Matheus como Co-autor e envio da v4</h3>
+        <p>
+          Adicionei as mudanças ao commit, incluindo a co-autoria do Matheus Giarola conforme a
+          <a href="https://github.com/torvalds/linux/blob/master/Documentation/process/submitting-patches.rst" target="_blank">
+            documentação oficial de submissão de patches
+          </a>, que exige que cada <code>Co-developed-by:</code> seja imediatamente seguido pelo
+          <code>Signed-off-by:</code> do co-autor correspondente. A mensagem da v4 ficou:
+        </p>
+        <figure>
+          <img src="../images/report-07/09-v4.png"
+            alt="Mensagem do commit v4 com co-autoria de Matheus Giarola e changelog atualizado" />
+          <figcaption>Commit v4 com <code>Co-developed-by</code> do Matheus Giarola e changelog completo</figcaption>
+        </figure>
+        <p>Após rodar o checkpatch e confirmar que estava correto, enviei o patch como v4:</p>
+        <pre data-lang="bash"><code>kw send-patch --send -1 -v4</code></pre>
+        <p>
+          Thread na lore:
+          <a href="https://lore.kernel.org/linux-iio/20260423133322.13298-1-lucas@ciziks.com/T/#u" target="_blank">
+            [PATCH v4] iio: adc: ad7280a - lore.kernel.org
+          </a>
         </p>
       </section>
 
