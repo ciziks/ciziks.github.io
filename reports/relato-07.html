@@ -54,6 +54,7 @@
           <li><a href="#v2">8) Desenvolvimento v2</a></li>
           <li><a href="#v3">9) Desenvolvimento v3</a></li>
           <li><a href="#v4">10) Desenvolvimento v4</a></li>
+          <li><a href="#v5">11) Desenvolvimento v5</a></li>
         </ol>
       </nav>
 
@@ -825,6 +826,109 @@ v2:
           Thread na lore:
           <a href="https://lore.kernel.org/linux-iio/20260423133322.13298-1-lucas@ciziks.com/T/#u" target="_blank">
             [PATCH v4] iio: adc: ad7280a - lore.kernel.org
+          </a>
+        </p>
+      </section>
+
+      <!-- ── 11) Desenvolvimento v5 ── -->
+      <section class="relato-section" id="v5">
+        <h2>11) Desenvolvimento v5 <small style="font-weight:normal; color: var(--text-muted)">· 24/04/2026</small></h2>
+        <p>
+          No dia seguinte ao envio da v4, Andy Shevchenko retornou sugerindo aplicar a mesma ideia de
+          extrair <code>devaddr</code> e <code>ch</code> como variáveis auxiliares no <code>switch</code> da
+          função <code>ad7280_read_raw()</code>, para melhorar a legibilidade ali também. A sugestão foi
+          fazer isso em um <strong>patch preparatório separado</strong>, antes do patch que altera os mutex.
+        </p>
+
+        <h3>11.1) Patch preparatório: extração de variáveis auxiliares</h3>
+        <p>
+          Criei uma nova branch <code>v5</code> para isolar essas alterações e implementei a extração das
+          variáveis em <code>ad7280_show_balance_timer()</code>, <code>ad7280_read_raw()</code> e
+          <code>ad7280_store_balance_timer()</code>. Em seguida, criei o commit preparatório:
+        </p>
+        <pre data-lang="bash"><code>git add drivers/iio/adc/ad7280a.c
+git commit -s -m "iio: adc: ad7280a: Extract chan->address bit fields into named local variables"</code></pre>
+
+        <h3>11.2) Commit original de substituição dos mutex</h3>
+        <p>
+          Após o commit preparatório, implementei de fato o commit original de substituição dos mutex:
+        </p>
+        <pre data-lang="bash"><code>git add drivers/iio/adc/ad7280a.c
+git commit -s -m "iio: adc: ad7280a: use cleanup helpers guard() and scoped_guard() for mutex locking"</code></pre>
+        <p>
+          Na função <code>ad7280_read_raw</code>, o resultado com as variáveis auxiliares ficou:
+        </p>
+        <pre data-lang="c"><code>static int ad7280_read_raw(struct iio_dev *indio_dev,
+			   struct iio_chan_spec const *chan,
+			   int *val,
+			   int *val2,
+			   long m)
+{
+	struct ad7280_state *st = iio_priv(indio_dev);
+	u8 devaddr = chan->address >> 8;
+	u8 ch = chan->address & 0xFF;
+	int ret;
+
+	switch (m) {
+	case IIO_CHAN_INFO_RAW: {
+		guard(mutex)(&st->lock);
+
+		if (chan->address == AD7280A_ALL_CELLS)
+			ret = ad7280_read_all_channels(st, st->scan_cnt, NULL);
+		else
+			ret = ad7280_read_channel(st, devaddr, ch);
+
+		if (ret < 0)
+			return ret;
+
+		*val = ret;
+
+		return IIO_VAL_INT;
+	}
+	case IIO_CHAN_INFO_SCALE:
+		if (ch <= AD7280A_CELL_VOLTAGE_6_REG)
+			*val = 4000;
+		else
+			*val = 5000;
+
+		*val2 = AD7280A_BITS;
+		return IIO_VAL_FRACTIONAL_LOG2;
+	case IIO_CHAN_INFO_OVERSAMPLING_RATIO:
+		*val = ad7280a_n_avg[st->oversampling_ratio];
+		return IIO_VAL_INT;
+	}
+	return -EINVAL;
+}</code></pre>
+
+        <h3>11.3) Enviando como patchset com cover-letter</h3>
+        <p>
+          Como agora tínhamos dois commits, com auxílio dos monitores usamos o formato com
+          <em>cover-letter</em> (padrão quando há mais de um commit unido no envio):
+        </p>
+        <pre data-lang="bash"><code>git format-patch -v5 --cover-letter -2</code></pre>
+        <p>E enviamos o patchset como v5:</p>
+        <pre data-lang="bash"><code>kw send-patch -s -v5 HEAD~2..HEAD</code></pre>
+        <p>A cover letter ficou:</p>
+        <figure>
+          <img src="../images/report-07/10-cover-letter.png"
+            alt="Cover letter do patchset v5 com resumo das alterações e índice dos dois commits" />
+          <figcaption>Cover letter do patchset v5</figcaption>
+        </figure>
+        <p>Os dois commits do patchset:</p>
+        <figure>
+          <img src="../images/report-07/11-v5_1.png"
+            alt="Patch 1 do patchset v5: extração das variáveis auxiliares devaddr e ch" />
+          <figcaption>Patch 1/2 — commit preparatório: extração das variáveis auxiliares</figcaption>
+        </figure>
+        <figure>
+          <img src="../images/report-07/12-v5_2.png"
+            alt="Patch 2 do patchset v5: substituição dos mutex_lock pelo guard e scoped_guard" />
+          <figcaption>Patch 2/2 — commit principal: substituição dos mutex pelo guard e scoped_guard</figcaption>
+        </figure>
+        <p>
+          Thread na lore:
+          <a href="https://lore.kernel.org/linux-iio/20260424125001.17822-1-lucas@ciziks.com/T/#t" target="_blank">
+            [PATCH v5 0/2] iio: adc: ad7280a - lore.kernel.org
           </a>
         </p>
       </section>
