@@ -55,6 +55,7 @@
           <li><a href="#v3">9) Desenvolvimento v3</a></li>
           <li><a href="#v4">10) Desenvolvimento v4</a></li>
           <li><a href="#v5">11) Desenvolvimento v5</a></li>
+          <li><a href="#conclusion">12) Conclusão</a></li>
         </ol>
       </nav>
 
@@ -931,9 +932,50 @@ git commit -s -m "iio: adc: ad7280a: use cleanup helpers guard() and scoped_guar
             [PATCH v5 0/2] iio: adc: ad7280a - lore.kernel.org
           </a>
         </p>
+
+        <h3>11.4) Patch aceito!</h3>
+        <p>
+          No mesmo dia do envio da v5, Andy Shevchenko respondeu adicionando suas tags de revisão ao patchset:
+        </p>
+        <pre><code>Suggested-by: Andy Shevchenko &lt;andriy.shevchenko@intel.com&gt;
+Reviewed-by: Andy Shevchenko &lt;andriy.shevchenko@intel.com&gt;</code></pre>
+        <p>
+          Em seguida, Jonathan Cameron, mantenedor do subsistema IIO, respondeu confirmando a aceitação:
+        </p>
+        <figure><img src="../images/report-07/13-patch_accepted.png"
+            alt="Patch Aceito pelo Jonathan Cameron" />
+          <figcaption>Patch Aceito pelo Jonathan Cameron</figcaption></figure>
+        
+        <p>
+          Com isso, o patch foi oficialmente aceito no subsistema IIO! Por ora, nada mais precisa ser feito
+          aqui, o próximo passo é acompanhar o rebase na <code>rc1</code> quando ela for disponibilizada.
+          O foco agora se volta ao patch que meu colega
+          <a href="https://frsouzaa.github.io/mac5856/jekyll/update/2026/04/16/patch.html" target="_blank">
+            Felipe Ribeiro de Souza está relatando em seu website
+          </a>.
+        </p>
       </section>
 
     </div>
+
+    <section class="relato-section" id="conclusion" style="max-width: 760px; margin: 2rem auto 0; padding: 0 1.5rem">
+      <h2>12) Conclusão</h2>
+      <p>
+        Essa primeira parte da disciplina foi extremamente enriquecedora. Nunca havia trabalhado com o Kernel Linux
+        antes, nem de longe imaginava o nível de organização, rigor e cultura colaborativa que envolve o ecossistema
+        open-source em torno dele. Foi muito interessante não só aprender a teoria e os princípios que sustentam esse
+        tipo de projeto, mas principalmente colocar tudo em prática: configurar o próprio ambiente de desenvolvimento,
+        entender o fluxo de submissão de patches, interagir com revisores reais e acompanhar o caminho de uma
+        contribuição até ser aceita em um subsistema oficial.
+      </p>
+      <p>
+        Observar o patch percorrer todas as etapas, desde a primeira versão até o <em>applied to the testing branch</em>
+        do Jonathan Cameron, foi uma experiência concreta de como funciona o desenvolvimento colaborativo em larga
+        escala. Agradeço em especial a minha dupla, Felipe, por todo o auxílio durante o processo; aos monitores David e Marcelo, que responderam todas as nossas dúvidas
+        no Telegram e não foram nada além de incríveis e pacientes; e ao professor Paulo, pela oportunidade e organização.
+        Espero que as próximas etapas da disciplina sejam tão interessantes quanto essa!
+      </p>
+    </section>
 
     <hr class="nav-divider" />
     <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
