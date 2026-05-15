@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAC0470 - Relato 09</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Início</a>
+    <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Relato 09</span>
+      <span class="tut-date">· 15/05/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>Corrigindo Bug no kw send-patch e Atualizando Documentação</h1>
+    <p class="description">
+      Investigação e correção do bug da issue
+      <a href="https://github.com/kworkflow/kworkflow/issues/1257" target="_blank">#1257</a>
+      no <code>kw send-patch</code>, onde a flag de versão <code>-v</code> posicionada ao final do
+      comando causava falha no <code>git send-email</code>. Inclui também a atualização do texto de
+      ajuda <code>-h</code> defasado em relação à documentação oficial.
+    </p>
+    <div class="tags">
+      <span class="tag">kw</span>
+      <span class="tag">send-patch</span>
+      <span class="tag">bash</span>
+      <span class="tag">bug-fix</span>
+      <span class="tag">git send-email</span>
+      <span class="tag">shunit2</span>
+      <span class="tag">PR</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#problema">1) O Problema</a></li>
+          <li><a href="#investigacao">2) Investigando o Código</a></li>
+          <li><a href="#solucao">3) A Solução</a></li>
+          <li><a href="#testes">4) Testes</a></li>
+          <li><a href="#verificacao">5) Verificação Manual</a></li>
+          <li><a href="#pr">6) Pull Request</a></li>
+          <li><a href="#doc">7) Atualizando a Documentação -h</a></li>
+        </ol>
+      </nav>
+
+      <!-- ── 1) Problema ── -->
+      <section class="relato-section" id="problema">
+        <h2>1) O Problema <small style="font-weight:normal; color: var(--text-muted)">· Issue <a href="https://github.com/kworkflow/kworkflow/issues/1257" target="_blank">#1257</a></small></h2>
+        <p>
+          A Melissa descreveu na issue que o <code>kw send-patch</code> falha quando a flag de versão
+          <code>-v[N]</code> é colocada ao final do comando. Se ela é usada no início, não há problemas.
+          O erro exibido é:
+        </p>
+        <pre data-lang="bash"><code>$ kw send-patch --send --simulate -8 -v8
+No patch files specified!
+
+git send-email [&lt;options&gt;] &lt;file|directory&gt;
+...</code></pre>
+        <p>
+          O comportamento esperado seria que <code>-8 -v8</code> e <code>-v8 -8</code> fossem
+          equivalentes, uma vez que o commit range e a versão do patch não deveriam ter dependência de ordem
+          para o usuário.
+        </p>
+      </section>
+
+      <!-- ── 2) Investigação ── -->
+      <section class="relato-section" id="investigacao">
+        <h2>2) Investigando o Código</h2>
+        <p>
+          O primeiro passo foi localizar o arquivo responsável pelo comando. O kw organiza cada subcomando
+          em seu próprio arquivo dentro de <code>src/</code>, então foi direto ao ponto:
+          <code>src/send_patch.sh</code>.
+        </p>
+        <p>Após ler o código, mapeei o fluxo de processamento dos argumentos:</p>
+        <ol>
+          <li>
+            A função <code>reposition_commit_count_arg</code> move argumentos do tipo <code>-N</code>
+            (somente dígitos) para depois do <code>--</code>.
+          </li>
+          <li>
+            O <code>kw_parse</code> processa <code>-v8</code> como a opção <code>-v</code> com argumento
+            <code>8</code>, armazenando em <code>PATCH_VERSION='-v8'</code>.
+          </li>
+          <li>
+            No case <code>--</code>, a variável <code>PASS_OPTION_TO_SEND_EMAIL</code> era montada
+            concatenando os argumentos passados e então o <code>PATCH_VERSION</code> ao final:
+            <pre data-lang="bash"><code>options_values['PASS_OPTION_TO_SEND_EMAIL']="$(str_strip "$pass_option_to_send_email ${options_values['PATCH_VERSION']}")"</code></pre>
+          </li>
+          <li>
+            Isso resultava em <code>-8 -v8</code> (versão ao final) sendo passado ao
+            <code>git send-email</code>. O git exige que a flag de versão venha <strong>antes</strong>
+            do commit range, daí o comando falhava internamente.
+          </li>
+        </ol>
+        <p>
+          Em resumo: a ordem de concatenação na linha 1122 de <code>src/send_patch.sh</code> estava
+          invertida.
+        </p>
+      </section>
+
+      <!-- ── 3) Solução ── -->
+      <section class="relato-section" id="solucao">
+        <h2>3) A Solução</h2>
+        <p>
+          Dentro da função <code>parse_mail_options</code>, era preciso inverter a ordem de
+          concatenação, colocando o <code>PATCH_VERSION</code> antes de
+          <code>$pass_option_to_send_email</code>. Aproveitei também para remover o espaço explícito
+          entre eles (o loop já inseria o separador):
+        </p>
+        <pre data-lang="diff"><code># src/send_patch.sh — linha 1122
+-  options_values['PASS_OPTION_TO_SEND_EMAIL']="$(str_strip "$pass_option_to_send_email ${options_values['PATCH_VERSION']}")"
++  options_values['PASS_OPTION_TO_SEND_EMAIL']="$(str_strip "${options_values['PATCH_VERSION']} $pass_option_to_send_email")"</code></pre>
+        <p>
+          Com essa mudança, independentemente da posição da flag <code>-v</code> na linha de comando
+          do usuário, a versão sempre será colocada antes do commit range ao construir o comando
+          <code>git send-email</code> internamente.
+        </p>
+      </section>
+
+      <!-- ── 4) Testes ── -->
+      <section class="relato-section" id="testes">
+        <h2>4) Testes</h2>
+        <p>
+          O kw utiliza o framework
+          <a href="https://github.com/kward/shunit2" target="_blank">shunit2</a> para os testes de
+          unidade em Bash. Conforme descrito na
+          <a href="https://github.com/ciziks/kworkflow/blob/unstable/documentation/content/tests.rst" target="_blank">documentação</a>,
+          é necessário clonar o shunit2 dentro do diretório <code>tests/</code>:
+        </p>
+        <pre data-lang="bash"><code>cd tests
+git clone --depth=1 https://github.com/kward/shunit2</code></pre>
+
+        <h3>4.1) Novo caso de teste em <code>test_mail_parser</code></h3>
+        <p>
+          Adicionei um novo caso de teste em <code>tests/unit/send_patch_test.sh</code> cobrindo
+          especificamente a combinação <code>-8 -v3</code> (versão ao final, que era o cenário com bug):
+        </p>
+        <pre data-lang="bash"><code># version flag must precede commit count so git send-email accepts it
+parse_mail_options -8 -v3
+
+expected='-v3'
+assert_equals_helper 'Set version with commit count: PATCH_VERSION' \
+  "$LINENO" "$expected" "${options_values['PATCH_VERSION']}"
+
+expected='-v3 -8'
+assert_equals_helper 'Set version with commit count: PASS_OPTION_TO_SEND_EMAIL' \
+  "$LINENO" "$expected" "${options_values['PASS_OPTION_TO_SEND_EMAIL']}"
+
+assert_equals_helper 'Set version with commit count: COMMIT_RANGE' \
+  "$LINENO" '-8 ' "${options_values['COMMIT_RANGE']}"</code></pre>
+
+        <h3>4.2) Atualizando <code>test_email_send</code></h3>
+        <p>
+          O teste <code>test_email_send</code> existente também precisou ser atualizado para refletir
+          a nova ordem correta dos parâmetros:
+        </p>
+        <pre data-lang="diff"><code># antes
+expected='git send-email --to="mail@test.com" extra_args --other_arg -13 -v2'
+
+# depois
+expected='git send-email --to="mail@test.com" -v2 extra_args --other_arg -13'</code></pre>
+
+        <h3>4.3) Rodando os testes</h3>
+        <pre data-lang="bash"><code>$ ./run_tests.sh test send_patch_test
+Running test [unit/send_patch_test]
+=========================================================
+test_validate_encryption
+test_validate_email
+test_find_commit_references
+test_validate_email_list
+test_reposition_commit_count_arg
+test_remove_blocked_recipients
+test_mail_parser
+test_mail_send
+test_get_configs
+test_missing_options
+test_config_values
+test_add_config
+test_mail_setup
+test_interactive_prompt
+test_interactive_setup
+test_load_template
+test_template_setup
+test_mail_verify
+test_mail_list
+test_add_recipients
+
+Ran 20 tests.
+
+OK
+=========================================================
+Total: 1 test file(s)
+Test file(s) SUCCEEDED</code></pre>
+        <p>Todos os 20 testes passando.</p>
+      </section>
+
+      <!-- ── 5) Verificação ── -->
+      <section class="relato-section" id="verificacao">
+        <h2>5) Verificação Manual</h2>
+        <p>
+          Para garantir que a correção funcionava de ponta a ponta, primeiro reproduzi o erro original
+          com o kw instalado sem as mudanças:
+        </p>
+        <pre data-lang="bash"><code>$ kw send-patch --send --simulate -8 -v8
+No patch files specified!
+
+git send-email [&lt;options&gt;] &lt;file|directory&gt;
+...</code></pre>
+        <p>Em seguida, instalei o kw localmente com as alterações:</p>
+        <pre data-lang="bash"><code>cd ~/kworkflow   # fork com as alterações
+./setup.sh --install</code></pre>
+        <p>
+          E rodei o comando novamente com <code>--verbose</code> para inspecionar o
+          <code>git send-email</code> gerado internamente:
+        </p>
+        <pre data-lang="bash"><code>$ kw send-patch --send --simulate --verbose -8 -v8
+git send-email --dry-run --annotate --cover-letter --no-chain-reply-to --thread -v8 -8</code></pre>
+        <p>
+          A flag <code>-v8</code> agora precede o commit range <code>-8</code>, exatamente como o
+          <code>git send-email</code> exige. O bug está corrigido.
+        </p>
+      </section>
+
+      <!-- ── 6) PR ── -->
+      <section class="relato-section" id="pr">
+        <h2>6) Pull Request</h2>
+        <p>
+          Seguindo as convenções descritas na
+          <a href="https://github.com/ciziks/kworkflow/blob/master/documentation/content/howtocontribute.rst" target="_blank">documentação de contribuição</a>
+          do kw:
+        </p>
+        <ul>
+          <li>Prefixo de área: <code>src: send-patch:</code> para o arquivo fonte;</li>
+          <li>Primeira linha com no máximo 50 caracteres, sem ponto final;</li>
+          <li>Body explicativo e  Signed-off-by;</li>
+          <li>Referência à issue no final: <code>Fixes: #1257</code>.</li>
+        </ul>
+        <pre data-lang="bash"><code>git add src/send_patch.sh tests/unit/send_patch_test.sh
+git commit</code></pre>
+        <figure>
+          <img src="../images/parte-2/commit-1.png"
+            alt="Mensagem do commit corrigindo o bug da issue #1257 no kw send-patch" />
+          <figcaption>Commit com a correção do bug e atualização dos testes</figcaption>
+        </figure>
+        <pre data-lang="bash"><code>git push origin unstable</code></pre>
+      </section>
+
+      <!-- ── 7) Doc -h ── -->
+      <section class="relato-section" id="doc">
+        <h2>7) Atualizando a Documentação <code>-h</code></h2>
+        <p>
+          Aproveitando que já estava modificando o <code>src/send_patch.sh</code>, atualizei o texto de
+          ajuda exibido pelo <code>kw send-patch -h</code>, que estava defasado em relação à
+          <a href="https://kworkflow.org/man/features/kw-send-patch.html" target="_blank">documentação oficial</a>.
+          A versão anterior não documentava várias flags que já existiam no comando:
+        </p>
+        <pre data-lang="diff"><code>-  'send-patch (-s | --send) [&lt;options&gt;] - Send patches via e-mail' \
++  'send-patch (-s | --send) [--simulate] [--private] [--rfc] [--to=&lt;recipient&gt;] [--cc=&lt;recipient&gt;] [&lt;rev-range&gt;] [-v&lt;n&gt;] [-- &lt;extra&gt;] - Send patches via e-mail' \
+
+-  'send-patch (-t | --setup) [--local | --global] [-f | --force] (&lt;config&gt; &lt;value&gt;)...' \
++  'send-patch (-t | --setup) [--local | --global] [-f | --force] (&lt;config&gt; &lt;value&gt;)... - Configure send-email options' \
+
+-  'send-patch (-i | --interactive) - Setup interactively' \
++  'send-patch (-i | --interactive) [--local | --global] - Setup interactively' \
+
+-  'send-patch --verify - Check if required configurations are set' \
++  'send-patch --verify [--local | --global] - Check if required configurations are set' \
+
+-  'send-patch --template[=&lt;template&gt;] [-n] - Set send-email configs based on &lt;template&gt;' \
++  'send-patch --template[=&lt;template&gt;] [-n | --no-interactive] [--local | --global] [-f | --force] - Set send-email configs based on &lt;template&gt;' \</code></pre>
+        <p>Criando um commit separado para essa mudança:</p>
+        <pre data-lang="bash"><code>git add src/send_patch.sh
+git commit</code></pre>
+        <figure>
+          <img src="../images/parte-2/commit-2.png"
+            alt="Mensagem do segundo commit atualizando a documentação -h do send-patch" />
+          <figcaption>Commit com a atualização da documentação <code>-h</code></figcaption>
+        </figure>
+        <pre data-lang="bash"><code>git push origin unstable</code></pre>
+        <p>
+          Com dois commits na branch <code>unstable</code> do fork, o próximo passo é abrir o Pull
+          Request no repositório oficial e aguardar a revisão do David.
+        </p>
+      </section>
+
+    </div>
+
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-08.html">← Início da Contribuição ao kworkflow</a>
+      <span></span>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
+
+</html>

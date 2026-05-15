@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAC0470 - Relato 08</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Início</a>
+    <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Relato 08</span>
+      <span class="tut-date">· 13/05/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>Início da Contribuição ao kworkflow</h1>
+    <p class="description">
+      Definição do projeto de contribuição para a segunda etapa da disciplina: escolha do
+      <strong>kworkflow</strong> como projeto alvo, seleção das issues a serem trabalhadas e
+      configuração inicial do ambiente de desenvolvimento com fork e clone do repositório.
+    </p>
+    <div class="tags">
+      <span class="tag">kw</span>
+      <span class="tag">kworkflow</span>
+      <span class="tag">bash</span>
+      <span class="tag">open-source</span>
+      <span class="tag">issues</span>
+      <span class="tag">fork</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#projeto">1) O Projeto kworkflow</a></li>
+          <li><a href="#issues">2) Selecionando as Issues</a></li>
+          <li><a href="#ambiente">3) Configurando o Ambiente</a></li>
+        </ol>
+      </nav>
+
+      <!-- ── 1) O Projeto ── -->
+      <section class="relato-section" id="projeto">
+        <h2>1) O Projeto kworkflow</h2>
+        <p>
+          O projeto de contribuição em software livre que eu e minha dupla
+          <strong>Felipe Ribeiro de Souza</strong> escolhemos, após sugestão e discussão com o
+          professor Paulo e o monitor David, foi colaborar com o
+          <a href="https://github.com/kworkflow/kworkflow/" target="_blank"><strong>kworkflow (kw)</strong></a>.
+        </p>
+        <p>
+          O <strong>kw</strong> é uma ferramenta de linha de comando escrita em Bash que simplifica o
+          workflow de desenvolvimento do kernel Linux: build, deploy em VMs, envio de patches por e-mail,
+          gerenciamento de configurações, entre outros. É mantido principalmente por Rodrigo Siqueira e
+          colaboradores da comunidade brasileira de desenvolvimento do kernel, o que facilita a comunicação
+          e o suporte durante a contribuição.
+        </p>
+        <p>
+          A escolha fez sentido por dois motivos principais: durante a primeira etapa da disciplina usamos
+          intensamente o <code>kw</code> para compilar e enviar nosso patch para o subsistema IIO, então já
+          tínhamos familiaridade com o projeto; e por ser escrito em Bash, o código é acessível sem precisar
+          de um ambiente de compilação complexo.
+        </p>
+        <p>
+          Primeiramente, cogitamos contribuir atualizando os textos de ajuda (<code>-h</code>) de alguns
+          comandos, pois durante a etapa do kernel percebemos uma defasagem entre a documentação oficial e o
+          que era exibido no terminal. O Felipe também notou que alguns workflows do GitHub Actions estavam
+          usando versões depreciadas de actions. Entretanto, após avaliar as issues e conversar com o David,
+          optamos por seguir um caminho mais robusto: implementar features e corrigir bugs solicitados
+          diretamente pelos mantenedores.
+        </p>
+      </section>
+
+      <!-- ── 2) Issues ── -->
+      <section class="relato-section" id="issues">
+        <h2>2) Selecionando as Issues</h2>
+        <p>
+          Investigamos as issues abertas no repositório e separamos as mais interessantes para trabalhar
+          durante a segunda etapa da disciplina:
+        </p>
+        <table style="width:100%; border-collapse: collapse; margin: 1rem 0;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding: 0.6rem 0.5rem; border-bottom: 2px solid var(--border)">Issue</th>
+              <th style="text-align:left; padding: 0.6rem 0.5rem; border-bottom: 2px solid var(--border)">Descrição</th>
+              <th style="text-align:left; padding: 0.6rem 0.5rem; border-bottom: 2px solid var(--border)">Identificado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">
+                <a href="https://github.com/kworkflow/kworkflow/issues/1257" target="_blank">#1257</a>
+              </td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Bug no <code>git send-email</code> quando a flag <code>-v</code> é usada ao final do comando</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">melissawen</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">
+                <a href="https://github.com/kworkflow/kworkflow/issues/1163" target="_blank">#1163</a>
+              </td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Rodar <code>checkpatch</code> automaticamente antes do envio de patches</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">melissawen</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">
+                <a href="https://github.com/kworkflow/kworkflow/issues/1177" target="_blank">#1177</a>
+              </td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Suporte a <code>apply patch</code> a partir de URL</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">melissawen</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">—</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Atualizar texto de ajuda <code>-h</code> do <code>send-patch</code> (defasado em relação à doc oficial)</td>
+              <td style="padding: 0.5rem; border-bottom: 1px solid var(--border)">Lucas</td>
+            </tr>
+            <tr>
+              <td style="padding: 0.5rem">—</td>
+              <td style="padding: 0.5rem">Atualizar action <code>actions/checkout</code> no CI do kw (versão depreciada)</td>
+              <td style="padding: 0.5rem">Felipe</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          O plano é trabalhar nessas issues ao longo da segunda etapa e, caso finalizemos antes do esperado,
+          coletar mais issues para continuar contribuindo.
+        </p>
+      </section>
+
+      <!-- ── 3) Ambiente ── -->
+      <section class="relato-section" id="ambiente">
+        <h2>3) Configurando o Ambiente</h2>
+        <p>
+          O primeiro passo prático foi criar um fork do projeto no GitHub e clonar localmente. O monitor
+          David nos orientou a trabalhar na branch <code>unstable</code>, que é a branch de desenvolvimento
+          ativo do kw, e avisá-lo quando o PR fosse criado, pois ele mesmo faria a revisão.
+        </p>
+        <pre data-lang="bash"><code># Criando o fork pelo GitHub e clonando
+git clone git@github.com:ciziks/kworkflow.git
+cd kworkflow
+git remote add upstream git@github.com:kworkflow/kworkflow.git
+
+# Criando a branch de trabalho a partir da unstable
+git fetch upstream
+git checkout -b unstable upstream/unstable</code></pre>
+        <p>
+          Com o ambiente configurado, estávamos prontos para começar a trabalhar nas issues.
+          A primeira escolhida foi a
+          <a href="https://github.com/kworkflow/kworkflow/issues/1257" target="_blank">#1257</a>, aparentemente um bug no <code>kw send-patch</code> com a flag de versão, por ser bem delimitada e ter uma
+          reprodução clara descrita pela própria Melissa.
+        </p>
+      </section>
+
+    </div>
+
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <span></span>
+      <a href="relato-09.html">Corrigindo Bug no kw send-patch →</a>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
+
+</html>
