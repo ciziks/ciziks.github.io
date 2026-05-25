@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAC0470 - Relato 10</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Início</a>
+    <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Relato 10</span>
+      <span class="tut-date">· 20/05/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>Validando Patches com checkpatch antes do Envio no kw send-patch</h1>
+    <p class="description">
+      Implementação da issue
+      <a href="https://github.com/kworkflow/kworkflow/issues/1163" target="_blank">#1163</a>:
+      integração do <code>checkpatch.pl</code> ao fluxo do <code>kw send-patch</code>, garantindo que cada
+      patch seja validado quanto ao estilo do kernel Linux antes de ser enviado via
+      <code>git send-email</code>.
+    </p>
+    <div class="tags">
+      <span class="tag">kw</span>
+      <span class="tag">send-patch</span>
+      <span class="tag">checkpatch</span>
+      <span class="tag">bash</span>
+      <span class="tag">feature</span>
+      <span class="tag">shunit2</span>
+      <span class="tag">PR</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#problema">1) O Problema</a></li>
+          <li><a href="#infraestrutura">2) Infraestrutura Existente</a></li>
+          <li><a href="#solucao">3) A Solução</a></li>
+          <li><a href="#implementacao">4) Implementação</a></li>
+          <li><a href="#testes">5) Testes</a></li>
+          <li><a href="#fluxo">6) Fluxo Resultante</a></li>
+          <li><a href="#verificacao">7) Verificação Manual</a></li>
+          <li><a href="#pr">8) Pull Request</a></li>
+        </ol>
+      </nav>
+
+      <!-- ── 1) Problema ── -->
+      <section class="relato-section" id="problema">
+        <h2>1) O Problema <small style="font-weight:normal; color: var(--text-muted)">· Issue <a href="https://github.com/kworkflow/kworkflow/issues/1163" target="_blank">#1163</a></small></h2>
+        <p>
+          O <code>kw send-patch</code> envia patches diretamente via <code>git send-email</code> sem
+          nenhuma validação prévia de estilo. A documentação do kernel Linux recomenda explicitamente
+          que todo desenvolvedor rode o <code>checkpatch.pl</code> antes de submeter qualquer patch às
+          listas de discussão.
+        </p>
+        <p>
+          Na prática, o fluxo manual exigia uma etapa extra antes de cada envio:
+        </p>
+        <pre data-lang="bash"><code># fluxo atual: o desenvolvedor precisa lembrar de rodar isso manualmente
+kw codestyle --check meu-patch.patch   # ou ./scripts/checkpatch.pl diretamente
+kw send-patch --send -1</code></pre>
+        <p>
+          Eu mesmo enfrentei essa fricção no ciclo do kernel linux. Durante o desenvolvimento, toda vez que ia enviar um patch eu
+          rodava o <code>checkpatch</code> para garantir que a formatação estava correta. O processo
+          sendo manual tornava fácil esquecer a etapa e enviar patches com problemas de estilo.
+          A ideia da issue é que essa validação aconteça automaticamente como parte do fluxo do
+          <code>kw send-patch</code>.
+        </p>
+      </section>
+
+      <!-- ── 2) Infraestrutura ── -->
+      <section class="relato-section" id="infraestrutura">
+        <h2>2) Infraestrutura Existente</h2>
+        <p>
+          Antes de implementar, mapeei o que o kw já oferecia para montar a solução sem duplicar lógica:
+        </p>
+        <ul>
+          <li>
+            <code>src/codestyle.sh</code>: já sabe como invocar o <code>checkpatch.pl</code> e
+            encapsula as opções de configuração;
+          </li>
+          <li>
+            <code>pre_generate_patches()</code> em <code>src/send_patch.sh</code>: já gera os patches
+            em <code>${KW_CACHE_DIR}/patches</code> antes do envio via <code>git format-patch</code>;
+          </li>
+          <li>
+            <code>find_kernel_root()</code>: já é chamado em <code>mail_send()</code> para localizar
+            a raiz do kernel, onde o <code>checkpatch.pl</code> reside em
+            <code>scripts/checkpatch.pl</code>.
+          </li>
+        </ul>
+        <p>
+          Com esses três elementos já implementados no projeto, a solução seria encaixar uma nova função entre
+          <code>pre_generate_patches()</code> e a construção do comando <code>git send-email</code>.
+        </p>
+      </section>
+
+      <!-- ── 3) Solução ── -->
+      <section class="relato-section" id="solucao">
+        <h2>3) A Solução</h2>
+        <p>As mudanças necessárias foram divididas em quatro partes:</p>
+
+        <h3>3.1) Nova opção em <code>etc/send_patch.config</code></h3>
+        <p>
+          Para que o usuário possa desabilitar a validação sem usar flags, adicionei uma opção no
+          arquivo de configuração do <code>send-patch</code>:
+        </p>
+        <pre data-lang="bash"><code># Run checkpatch on each patch before sending. Set to 'no' to disable.
+checkpatch_before_send=yes</code></pre>
+
+        <h3>3.2) Nova função <code>run_checkpatch_on_patches()</code></h3>
+        <p>
+          A função itera sobre todos os patches gerados no cache e executa o <code>checkpatch.pl</code>
+          em cada um. Uma decisão de design importante: ela <strong>não aborta no primeiro erro</strong>.
+          Em vez disso, percorre todos os patches, acumula as falhas e retorna <code>1</code> somente
+          ao final, caso ao menos um tenha falhado. Assim o desenvolvedor vê os problemas de
+          <em>todos</em> os patches antes de ser notificado do abort.
+        </p>
+
+        <h3>3.3) Integração em <code>mail_send()</code></h3>
+        <p>
+          Logo após <code>pre_generate_patches()</code> e antes de construir o comando
+          <code>git send-email</code>, a chamada foi encaixada com três <em>guards</em> combinados:
+        </p>
+        <pre data-lang="bash"><code>if [[ -n "$kernel_root" && "${send_patch_config[checkpatch_before_send]}" != 'no' &&
+    -z "${options_values['NO_CHECKPATCH']}" ]]; then
+  run_checkpatch_on_patches "$kernel_root" "$flag"
+  if [[ "$?" != 0 ]]; then
+    complain 'Patches failed checkpatch, aborting send.'
+    return 1
+  fi
+fi</code></pre>
+        <p>
+          Os três <em>guards</em> garantem que o checkpatch só executa quando: (1) estamos dentro de uma
+          kernel tree (<code>-n "$kernel_root"</code>); (2) a opção não foi desabilitada no
+          config (<code>checkpatch_before_send != 'no'</code>); e (3) o usuário não passou
+          <code>--no-checkpatch</code> (<code>-z "${options_values['NO_CHECKPATCH']}"</code>).
+        </p>
+
+        <h3>3.4) Flag <code>--no-checkpatch</code> no parser</h3>
+        <p>
+          Para usuários que queiram pular a validação pontualmente sem alterar o arquivo de
+          configuração, adicionei a flag <code>--no-checkpatch</code> ao parser de argumentos do
+          comando.
+        </p>
+      </section>
+
+      <!-- ── 4) Implementação ── -->
+      <section class="relato-section" id="implementacao">
+        <h2>4) Implementação</h2>
+
+        <h3>4.1) <code>src/send_patch.sh</code></h3>
+        <p>
+          Adicionei a função <code>run_checkpatch_on_patches(kernel_root, flag)</code>, que localiza
+          o <code>scripts/checkpatch.pl</code> a partir da raiz do kernel. Se o script não for
+          encontrado (por exemplo, fora de uma árvore do kernel), a função retorna silenciosamente
+          sem erro, pois o usuário não deve ser bloqueado por isso:
+        </p>
+        <pre data-lang="bash"><code>function run_checkpatch_on_patches()
+{
+  local kernel_root="$1"
+  local flag="$2"
+  local checkpatch_options="${send_patch_config['checkpatch_opts']}"
+  local checkpatch
+  local patch_cache="${KW_CACHE_DIR}/patches"
+  local ret=0
+
+  checkpatch="$(join_path "$kernel_root" 'scripts/checkpatch.pl')"
+  if [[ ! -f "$checkpatch" ]]; then
+    warning 'checkpatch.pl not found, skipping style check.'
+    return 0
+  fi
+
+  for patch_path in "${patch_cache}/"*; do
+    if ! is_a_patch "$patch_path"; then
+      continue
+    fi
+    say "Running checkpatch on: $(basename "$patch_path")"
+    local cmd="perl $checkpatch"
+    [[ -n "$checkpatch_options" ]] && cmd+=" $checkpatch_options"
+    cmd_manager "$flag" "$cmd $patch_path"
+    if [[ "$?" != 0 ]]; then
+      ret=1
+    fi
+  done
+
+  return "$ret"
+}</code></pre>
+        <p>
+          Dois detalhes importantes na implementação: quando o <code>checkpatch.pl</code> não é
+          encontrado, a função emite um <code>warning</code> (não silêncio) e segue adiante, útil
+          para desenvolvedores fora de uma kernel tree. O checkpatch é invocado via
+          <code>cmd_manager</code> com <code>perl</code>, o que respeita o <code>flag</code> de modo
+          de execução (real vs. simulado) e suporta opções extras via
+          <code>checkpatch_opts</code> no config.
+        </p>
+        <p>
+          Também adicionei <code>load_kworkflow_config</code> ao final do script para garantir que as
+          configurações (incluindo <code>checkpatch_opts</code>) sejam carregadas corretamente.
+        </p>
+
+        <h3>4.2) <code>etc/send_patch.config</code></h3>
+        <pre data-lang="diff"><code>+# Run checkpatch on each patch before sending. Set to 'no' to disable.
++checkpatch_before_send=yes</code></pre>
+      </section>
+
+      <!-- ── 5) Testes ── -->
+      <section class="relato-section" id="testes">
+        <h2>5) Testes</h2>
+        <p>
+          Os testes foram escritos em <code>tests/unit/send_patch_test.sh</code> usando o
+          <a href="https://github.com/kward/shunit2" target="_blank">shunit2</a>. Cobri dois grupos
+          de cenários:
+        </p>
+
+        <h3>5.1) <code>test_run_checkpatch_on_patches</code></h3>
+        <p>Cinco cenários para a função isolada:</p>
+        <ul>
+          <li><strong>Ausência do <code>checkpatch.pl</code></strong> = deve retornar 0 (skip silencioso), sem bloquear o usuário.</li>
+          <li><strong>Nenhum patch no cache</strong> = sem arquivos <code>.patch</code>, retorna 0.</li>
+          <li><strong>Um patch válido</strong> = <code>checkpatch.pl</code> retorna 0, função retorna 0.</li>
+          <li><strong>Falha em um único patch</strong> = <code>checkpatch.pl</code> retorna 1, função retorna 1.</li>
+          <li>
+            <strong>Múltiplos patches com falha</strong> = verifica que
+            <em>ambos</em> os patches são processados antes do retorno, não apenas o primeiro.
+          </li>
+        </ul>
+
+        <h3>5.2) <code>test_mail_send_checkpatch</code></h3>
+        <p>
+          Teste de integração ponta a ponta a partir de um kernel root simulado. Cobre três casos:
+        </p>
+        <ul>
+          <li>Abort quando o <code>checkpatch</code> falha em algum patch;</li>
+          <li>Bypass via <code>--no-checkpatch</code>: o envio prossegue mesmo com falhas;</li>
+          <li>Bypass via <code>checkpatch_before_send=no</code> no arquivo de configuração.</li>
+        </ul>
+
+        <h3>5.3) Rodando os testes</h3>
+        <pre data-lang="bash"><code>$ ./run_tests.sh test send_patch_test
+Running test [unit/send_patch_test]
+=========================================================
+test_validate_encryption
+test_validate_email
+test_find_commit_references
+test_validate_email_list
+test_reposition_commit_count_arg
+test_remove_blocked_recipients
+test_mail_parser
+test_mail_send
+test_run_checkpatch_on_patches
+test_mail_send_checkpatch
+test_get_configs
+test_missing_options
+test_config_values
+test_add_config
+test_mail_setup
+test_interactive_prompt
+test_interactive_setup
+test_load_template
+test_template_setup
+test_mail_verify
+test_mail_list
+test_add_recipients
+
+Ran 22 tests.
+
+OK
+=========================================================
+Total: 1 test file(s)
+Test file(s) SUCCEEDED</code></pre>
+        <p>Todos os 22 testes passando, incluindo os dois novos.</p>
+      </section>
+
+      <!-- ── 6) Fluxo Resultante ── -->
+      <section class="relato-section" id="fluxo">
+        <h2>6) Fluxo Resultante</h2>
+        <p>
+          Com a feature implementada, o <code>kw send-patch --send -1</code> agora segue o fluxo:
+        </p>
+        <pre data-lang="bash"><code>kw send-patch --send -1
+  → pre_generate_patches()       # gera patches em ${KW_CACHE_DIR}/patches
+  → run_checkpatch_on_patches()  # valida cada patch com checkpatch.pl
+      ✗ erro → aborta e exibe o output do checkpatch para cada patch com falha
+      ✓ ok   → continua
+  → git send-email ...           # envia os patches</code></pre>
+        <p>
+          Para pular a validação quando necessário, o usuário tem duas opções equivalentes:
+        </p>
+        <pre data-lang="bash"><code># via flag pontual
+kw send-patch --send --no-checkpatch -1
+
+# via configuração persistente em ~/.config/kw/send_patch.config
+checkpatch_before_send=no</code></pre>
+        <p>
+          A escolha de executar as validações por padrão e oferecer o escape hatch via
+          <code>--no-checkpatch</code> é intencional: o objetivo é que o caminho seguro seja o
+          caminho fácil. A opção de validar todos os commits de um multi-patch mas abortar somente
+          se ao menos um falhar é uma escolha de design que pode ser revisitada no futuro.
+        </p>
+      </section>
+
+      <!-- ── 7) Verificação Manual ── -->
+      <section class="relato-section" id="verificacao">
+        <h2>7) Verificação Manual</h2>
+        <p>
+          Uma dica do monitor David: ao invés de reinstalar o kw a cada mudança (como fiz no relato
+          anterior com <code>./setup.sh --install</code>), é possível usar o executável
+          <code>./kw</code> diretamente na raiz do repositório. Ele detecta o ambiente e aponta todas
+          as variáveis de ambiente (<code>KW_LIB_DIR</code>, <code>KW_ETC_DIR</code>, etc...) para
+          os diretórios locais do projeto, sem instalar nada no sistema:
+        </p>
+        <pre data-lang="bash"><code>$ ./kw send-patch -h
+=========================================================
+[INFO]: Running kw using repository executable.
+
+KW environment variables are set to the following:
+
+        KW_CACHE_DIR=/home/ciziks-debian/.cache/kw
+        KW_ETC_DIR=.../kworkflow/etc
+        KW_LIB_DIR=.../kworkflow/src
+        KW_PLUGINS_DIR=.../kworkflow/src/plugins
+        ...
+
+=========================================================
+kw send-patch:
+  send-patch (-s | --send) [--simulate] [--private] [--rfc] [--no-checkpatch] ...</code></pre>
+        <p>
+          Confirmado: <code>--no-checkpatch</code> já aparece no <code>-h</code>, indicando que o
+          parser foi atualizado corretamente.
+        </p>
+
+        <p>
+          Para os testes manuais, criei um ambiente simulado em <code>/tmp/kw-checkpatch-test</code>
+          com dois commits intencionalmente mal-formatados, de modo a acionar o
+          <code>checkpatch.pl</code>.
+        </p>
+
+        <h3>Cenário 1 - checkpatch falha, deve abortar</h3>
+        <pre data-lang="bash"><code>$ ./kw send-patch -s --simulate --to=test@test.com
+=========================================================
+[INFO]: Running kw using repository executable.
+...
+=========================================================
+Running checkpatch on: 0001-drivers-my_driver-add-another_func.patch
+ERROR: space required around that open brace '{'
+ERROR: do not use assignment in if condition
+
+total: 2 errors, 0 warnings, 10 lines checked
+Patches failed checkpatch, aborting send.</code></pre>
+        <p>
+          O checkpatch encontrou 2 erros e o envio foi abortado antes de qualquer chamada ao
+          <code>git send-email</code>.
+        </p>
+
+        <h3>Cenário 2 - bypass com <code>--no-checkpatch</code></h3>
+        <pre data-lang="bash"><code>$ ./kw send-patch -s --simulate --no-checkpatch --to=test@test.com --private
+=========================================================
+[INFO]: Running kw using repository executable.
+...
+=========================================================
+/tmp/WrIhrB_3DK/0001-drivers-my_driver-add-another_func.patch
+Dry-OK. Log says:
+Server: smtp.protonmail.ch
+MAIL FROM:&lt;dev@test.com&gt;
+RCPT TO:&lt;test@test.com&gt;
+From: Test Dev &lt;dev@test.com&gt;
+To: test@test.com
+Subject: [PATCH] drivers: my_driver: add another_func
+...
+Result: OK</code></pre>
+        <p>
+          Com <code>--no-checkpatch</code>, o checkpatch é ignorado e o <code>git send-email
+          --dry-run</code> é executado normalmente.
+        </p>
+
+        <h3>Cenário 3 - bypass via config (<code>checkpatch_before_send=no</code>)</h3>
+        <p>
+          Editando <code>etc/send_patch.config</code> e setando <code>checkpatch_before_send=no</code>,
+          o comportamento é idêntico ao cenário 2 sem precisar usar a flag.
+        </p>
+
+        <h3>Cenário 4 - checkpatch passa</h3>
+        <p>
+          Substituindo o <code>checkpatch.pl</code> simulado por um que retorna 0:
+        </p>
+        <pre data-lang="bash"><code>printf '#!/usr/bin/perl\nprint "Your patch looks good!\\n";\nexit 0;\n' \
+  &gt; /tmp/kw-checkpatch-test/scripts/checkpatch.pl
+
+$ ./kw send-patch -s --simulate --to=test@test.com</code></pre>
+        <p>
+          O output do checkpatch exibe sucesso e o <code>git send-email --dry-run</code> é executado
+          em seguida. Todos os quatro cenários se comportaram exatamente como esperado.
+        </p>
+      </section>
+
+      <!-- ── 8) PR ── -->
+      <section class="relato-section" id="pr">
+        <h2>8) Pull Request</h2>
+        <p>
+          Seguindo as convenções de contribuição do kw, os commits foram organizados por escopo:
+        </p>
+        <ul>
+          <li>Commit 1: implementação da função e integração em <code>src/send_patch.sh</code>;</li>
+          <li>Commit 2: nova opção em <code>etc/send_patch.config</code>;</li>
+          <li>Commit 3: testes em <code>tests/unit/send_patch_test.sh</code>.</li>
+        </ul>
+        <pre data-lang="bash"><code>git push origin unstable</code></pre>
+        <p>
+          O Pull Request foi aberto no repositório oficial referenciando a issue
+          <a href="https://github.com/kworkflow/kworkflow/issues/1163" target="_blank">#1163</a>
+          e aguarda revisão.
+        </p>
+      </section>
+
+    </div>
+
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-09.html">← Corrigindo Bug no kw send-patch</a>
+      <span></span>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
+
+</html>
