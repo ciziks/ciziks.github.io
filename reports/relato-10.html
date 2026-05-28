@@ -420,8 +420,35 @@ $ ./kw send-patch -s --simulate --to=test@test.com</code></pre>
         <pre data-lang="bash"><code>git push origin unstable</code></pre>
         <p>
           O Pull Request foi aberto no repositório oficial referenciando a issue
-          <a href="https://github.com/kworkflow/kworkflow/issues/1163" target="_blank">#1163</a>
-          e aguarda revisão.
+          <a href="https://github.com/kworkflow/kworkflow/issues/1163" target="_blank">#1163</a>.
+        </p>
+
+        <h3>8.1) Erro na CI - <code>sh-checker</code> (shfmt)</h3>
+        <p>
+          Após abrir o PR, os testes automatizados de CI acusaram falha no <em>sh-checker</em>:
+        </p>
+        <figure>
+          <img src="../images/parte-2/actions-pr-2.png" alt="CI falhando no sh-checker" style="max-width:100%; border-radius:6px;" />
+        </figure>
+        <p>
+          O <code>shfmt</code> reportou um problema de indentação em <code>src/send_patch.sh</code>: um
+          espaço extra na continuação do <code>if</code> dentro de <code>mail_send()</code>:
+        </p>
+        <pre data-lang="diff"><code>--- src/send_patch.sh.orig
++++ src/send_patch.sh
+@@ -166,7 +166,7 @@
+   if [[ -n "$kernel_root" && "${send_patch_config[checkpatch_before_send]}" != 'no' &&
+-      -z "${options_values['NO_CHECKPATCH']}" ]]; then
++    -z "${options_values['NO_CHECKPATCH']}" ]]; then</code></pre>
+        <p>
+          A correção foi remover o espaço extra na linha de continuação do <code>if</code> para
+          alinhar com o padrão esperado pelo <code>shfmt -i=2</code>, e atualizar o commit com
+          <code>git commit --amend</code>. Após isso, a CI passou com sucesso.
+        </p>
+
+        <p>
+          Link para o PR:
+          <a href="https://github.com/kworkflow/kworkflow/pull/1266" target="_blank">#1266</a>.
         </p>
       </section>
 
@@ -430,7 +457,7 @@ $ ./kw send-patch -s --simulate --to=test@test.com</code></pre>
     <hr class="nav-divider" />
     <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
       <a href="relato-09.html">← Corrigindo Bug no kw send-patch</a>
-      <span></span>
+      <a href="relato-11.html">Reorganizando PRs, Rebase e Documentação →</a>
     </div>
   </main>
 

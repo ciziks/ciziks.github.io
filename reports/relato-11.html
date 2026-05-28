@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAC0470 - Relato 11</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>" />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Início</a>
+    <span class="site-name"><strong>@ciziks</strong> · MAC0470</span>
+  </div>
+
+  <div class="relato-hero">
+    <div class="tut-label">
+      <span class="tut-number">Relato 11</span>
+      <span class="tut-date">· 27/05/2026</span>
+      <span class="badge badge-done">Completo</span>
+    </div>
+    <h1>Reorganizando PRs, Rebase e Documentação no kw send-patch</h1>
+    <p class="description">
+      Limpeza e reorganização dos PRs
+      <a href="https://github.com/kworkflow/kworkflow/pull/1265" target="_blank">#1265</a> e
+      <a href="https://github.com/kworkflow/kworkflow/pull/1266" target="_blank">#1266</a>:
+      separação de responsabilidades entre branches, rebase para isolar diffs, correção de mensagens
+      de commit e adição da documentação de <code>--no-checkpatch</code> em
+      <code>kw-send-patch.rst</code>.
+    </p>
+    <div class="tags">
+      <span class="tag">kw</span>
+      <span class="tag">send-patch</span>
+      <span class="tag">git</span>
+      <span class="tag">rebase</span>
+      <span class="tag">docs</span>
+      <span class="tag">PR</span>
+    </div>
+  </div>
+
+  <main>
+    <div class="doc-content">
+      <nav class="toc">
+        <h3>Sumário</h3>
+        <ol>
+          <li><a href="#contexto">1) Contexto</a></li>
+          <li><a href="#pr1265">2) PR #1265 - Correção da Ordem das Flags de Versão</a></li>
+          <li><a href="#docs-branch">3) Branch <code>send-patch-docs</code></a></li>
+          <li><a href="#pr1266">4) PR #1266 - Integração do checkpatch</a></li>
+          <li><a href="#resultado">5) Estado Final</a></li>
+        </ol>
+      </nav>
+
+      <!-- ── 1) Contexto ── -->
+      <section class="relato-section" id="contexto">
+        <h2>1) Contexto</h2>
+        <p>
+          Após abrir os PRs iniciais, o feedback recebido apontou dois problemas de organização: commits
+          com escopo misturado entre os PRs e mensagens de commit fora do padrão do projeto. O
+          objetivo desta sessão foi separar as responsabilidades corretamente e garantir que cada PR
+          tocasse apenas no que lhe dizia respeito.
+        </p>
+        <p>
+          Os três conjuntos de mudanças que haviam sido misturados eram:
+        </p>
+        <ul>
+          <li><strong>Correção da ordem das flags de versão</strong>: PR #1265, branch <code>unstable</code>;</li>
+          <li><strong>Atualização do texto de help</strong>: commit separado, branch <code>send-patch-docs</code>;</li>
+          <li><strong>Integração do checkpatch</strong>: PR #1266, branch <code>send-patch-checkpatch</code>.</li>
+        </ul>
+      </section>
+
+      <!-- ── 2) PR #1265 ── -->
+      <section class="relato-section" id="pr1265">
+        <h2>2) PR <a href="https://github.com/kworkflow/kworkflow/pull/1265" target="_blank">#1265</a> - Correção da Ordem das Flags de Versão</h2>
+        <p>
+          O PR #1265 continha originalmente dois commits além da correção em si: o commit de
+          <em>update help</em> e ajustes de mensagens que não pertenciam a este escopo.
+          As alterações feitas foram:
+        </p>
+        <ul>
+          <li>
+            <strong>Mensagens de commit corrigidas</strong>: removida a indentação do corpo das mensagens
+            (o padrão do kw não usa espaços extras no corpo) e adicionadas as linhas
+            <code>Co-Developed-by</code> e <code>Signed-off-by</code> para o Felipe, co-autor da
+            correção;
+          </li>
+          <li>
+            <strong>Commit de <em>update help</em> removido</strong>: separado para uma branch própria
+            (<code>send-patch-docs</code>), evitando que este PR tocasse em documentação;
+          </li>
+          <li>
+            <strong>Force push</strong> após o rebase para refletir o histórico limpo no repositório
+            remoto.
+          </li>
+        </ul>
+        <pre data-lang="bash"><code>git rebase -i HEAD~3        # remove o commit de help, reordena
+git push --force-with-lease origin unstable</code></pre>
+      </section>
+
+      <!-- ── 3) Branch send-patch-docs ── -->
+      <section class="relato-section" id="docs-branch">
+        <h2>3) Branch <code>send-patch-docs</code> (novo PR)</h2>
+        <p>
+          Durante a revisão, o revisor sinalizou que as mudanças de documentação misturadas com o
+          código do PR #1265 dificultavam a leitura do diff. A sugestão foi separar tudo que fosse
+          documentação em um PR independente. A branch <code>send-patch-docs</code> nasceu disso.
+        </p>
+
+        <h3>3.1) Criação da branch</h3>
+        <p>O processo foi criar a branch a partir do commit imediatamente anterior ao <code>e1ef243</code>
+        na branch <code>unstable</code> e fazer cherry-pick do commit de documentação:</p>
+        <pre data-lang="bash"><code>git checkout -b send-patch-docs &lt;commit-antes-de-e1ef243&gt;
+git cherry-pick e1ef243</code></pre>
+
+        <h3>3.2) Conteúdo das mudanças</h3>
+        <p>O PR concentra duas frentes de documentação:</p>
+        <ul>
+          <li>
+            <strong>Texto de help curto corrigido</strong>: o output de <code>kw send-patch --help</code>
+            estava desatualizado em relação à documentação oficial. A correção alinhou o texto exibido
+            no terminal ao que a documentação RST já descrevia;
+          </li>
+          <li>
+            <strong>Documentação da integração com checkpatch em <code>kw-send-patch.rst</code></strong>:
+            adicionada uma explicação completa do comportamento automático do <code>checkpatch.pl</code>,
+            incluindo:
+            <ul>
+              <li>como desabilitar permanentemente via <code>checkpatch_before_send=no</code> em
+                <code>send_patch.config</code>;</li>
+              <li>como passar opções extras ao script via <code>checkpatch_opts</code>;</li>
+              <li>a flag <code>--no-checkpatch</code> documentada tanto no <strong>SYNOPSIS</strong>
+                quanto na seção <strong>OPTIONS</strong>.</li>
+            </ul>
+          </li>
+        </ul>
+
+        <h3>3.3) Mensagens de commit</h3>
+        <p>
+          Assim como nos outros PRs, as mensagens de commit foram corrigidas: indentação do corpo
+          removida e as linhas <code>Co-Developed-by</code> e <code>Signed-off-by</code> adicionadas
+          para o Felipe.
+        </p>
+      </section>
+
+      <!-- ── 4) PR #1266 ── -->
+      <section class="relato-section" id="pr1266">
+        <h2>4) PR <a href="https://github.com/kworkflow/kworkflow/pull/1266" target="_blank">#1266</a> - Integração do checkpatch</h2>
+        <p>
+          Este foi o PR mais trabalhoso de reorganizar. O estado inicial tinha os commits da correção
+          de versão e do help embutidos na branch, o que poluía o diff e tornava mais difícil revisar
+          o que de fato pertencia à feature de checkpatch.
+        </p>
+
+        <h3>4.1) Rebase sobre a base correta</h3>
+        <p>
+          A branch foi rebaseada sobre o commit <code>b0e7621</code>, que é o ponto upstream sem a
+          correção de versão. Isso garantiu que o diff do PR mostrasse apenas as mudanças do
+          checkpatch:
+        </p>
+        <pre data-lang="bash"><code>git rebase --onto b0e7621 &lt;commit-da-versao&gt; send-patch-checkpatch</code></pre>
+        <p>
+          Durante o rebase, houve um conflito no texto de help: as duas branches haviam tocado no
+          mesmo trecho. A resolução foi manter o formato antigo do help, adicionando apenas a linha
+          de <code>--no-checkpatch</code>, sem incorporar as alterações que pertenciam à branch
+          <code>send-patch-docs</code>.
+        </p>
+
+        <h3>4.2) Remoção dos commits estranhos</h3>
+        <ul>
+          <li>
+            Removidos os commits de correção de versão - pertencem ao PR #1265;
+          </li>
+          <li>
+            Removidos os testes da correção de versão do commit de testes - esses testes seguirão
+            com o PR #1265.
+          </li>
+        </ul>
+
+        <h3>4.3) Mensagens de commit</h3>
+        <p>
+          Todos os três commits do PR foram reescritos:
+        </p>
+        <ul>
+          <li>Corpo sem indentação extra, seguindo o padrão do projeto;</li>
+          <li><code>Co-Developed-by</code> e <code>Signed-off-by</code> adicionados para o Felipe;</li>
+          <li>
+            O primeiro commit teve sua mensagem expandida para explicar <em>por que</em> a validação
+            com checkpatch é necessária antes do envio - contexto que estava ausente na versão
+            anterior.
+          </li>
+        </ul>
+
+        <h3>4.4) Documentação em <code>kw-send-patch.rst</code></h3>
+        <p>
+          Com a reorganização, ficou claro que a documentação RST precisava refletir a nova flag.
+          As adições feitas foram:
+        </p>
+        <ul>
+          <li>
+            <code>--no-checkpatch</code> adicionado ao <strong>SYNOPSIS</strong> e à seção
+            <strong>OPTIONS</strong> do arquivo <code>documentation/man/kw-send-patch.rst</code>;
+          </li>
+          <li>
+            Uma nota adicionada na seção <strong>DESCRIPTION</strong> explicando o comportamento
+            completo: checkpatch roda por padrão em todos os patches do cache, aborta o envio se
+            ao menos um falhar, e pode ser desabilitado via <code>--no-checkpatch</code> ou via
+            <code>checkpatch_before_send=no</code> no arquivo de configuração.
+          </li>
+        </ul>
+        <pre data-lang="rst"><code>.. option:: --no-checkpatch
+
+   Skip the checkpatch.pl validation step before sending. By default,
+   kw send-patch runs checkpatch on every generated patch and aborts if
+   any of them fail. Use this flag to bypass that check.</code></pre>
+
+        <h3>4.5) Force push</h3>
+        <pre data-lang="bash"><code>git push --force-with-lease origin send-patch-checkpatch</code></pre>
+      </section>
+
+      <!-- ── 5) Estado Final ── -->
+      <section class="relato-section" id="resultado">
+        <h2>5) Estado Final</h2>
+        <p>Ao final da sessão, as três frentes de trabalho estavam separadas e limpas:</p>
+        <ul>
+          <li>
+            <strong>PR <a href="https://github.com/kworkflow/kworkflow/pull/1265" target="_blank">#1265</a></strong>
+            (<code>unstable</code>): apenas a correção da ordem das flags de versão, com mensagens
+            corretas e co-autoria do Felipe;
+          </li>
+          <li>
+            <strong>Branch <code>send-patch-docs</code></strong>: um único commit de atualização do
+            texto de help, pronto para virar PR independente;
+          </li>
+          <li>
+            <strong>PR <a href="https://github.com/kworkflow/kworkflow/pull/1266" target="_blank">#1266</a></strong>
+            (<code>send-patch-checkpatch</code>): três commits de escopo único (implementação,
+            config, testes), documentação RST atualizada e mensagens de commit no padrão do projeto.
+          </li>
+        </ul>
+        <p>
+          A reorganização tornou os diffs de revisão muito mais limpos: cada PR agora conta sua
+          própria história sem ruído de outras mudanças, o que facilita tanto a revisão pelos
+          mantenedores quanto o eventual <em>bisect</em> caso algum bug seja introduzido.
+        </p>
+      </section>
+
+    </div>
+
+    <hr class="nav-divider" />
+    <div class="tut-nav" style="max-width: 760px; margin: 0 auto; padding: 0 1.5rem 2rem">
+      <a href="relato-10.html">← Validando Patches com checkpatch antes do Envio</a>
+      <span></span>
+    </div>
+  </main>
+
+  <footer>
+    <p>
+      <a href="../index.html">← Voltar ao início</a>
+      &nbsp;·&nbsp; MAC0470 Desenvolvimento de Software Livre · IME-USP
+    </p>
+  </footer>
+  <script src="../js/copy-code.js"></script>
+</body>
+
+</html>
